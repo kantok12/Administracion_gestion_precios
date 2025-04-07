@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BarChart3, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-// Definimos la interfaz para el producto, que será la misma para ambos, equipos y opcionales
+// Definimos la interfaz para el producto (equipos y opcionales)
 interface Producto {
   codigo_producto: string;
   nombre_del_producto: string;
@@ -11,12 +11,14 @@ interface Producto {
 }
 
 export default function Calculo() {
-  // Estados para los productos
-  const [productos, setProductos] = useState<Producto[]>([]);
-  const [searchTerm, setSearchTerm] = useState(''); // Corregido el nombre de searchTerm
+  const [productos, setProductos] = useState<Producto[]>([]); // Equipos y opcionales combinados
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState<boolean>(false);
+  const [opcionalesDelModelo, setOpcionalesDelModelo] = useState<Producto[]>([]); // Opcionales para el modelo seleccionado
   const itemsPerPage = 10;
 
   // URLs de los webhooks de Equipos y Opcionales
@@ -54,16 +56,38 @@ export default function Calculo() {
     obtenerDatos();
   }, []);
 
-  const productosFiltrados = productos.filter((p) =>
-    [p.codigo_producto, p.nombre_del_producto, p.Descripcion, p.Modelo]
-      .some((field) => field.toLowerCase().includes(searchTerm.toLowerCase()))
+  // Filtrar solo los equipos principales
+  const equiposPrincipales = productos.filter(
+    (producto) => !producto.Modelo.includes('opcionales') // Filtra solo equipos sin la palabra 'opcionales'
   );
 
+  // Filtrar los opcionales basados en el modelo del equipo seleccionado
+  const opcionales = productos.filter(
+    (producto) => producto.Modelo.includes(selectedModel || '')
+  );
+
+  // Paginación
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentProductos = productosFiltrados.slice(indexOfFirstItem, indexOfLastItem);
+  const currentProductos = equiposPrincipales.slice(indexOfFirstItem, indexOfLastItem);
 
-  const totalPages = Math.ceil(productosFiltrados.length / itemsPerPage);
+  const totalPages = Math.ceil(equiposPrincipales.length / itemsPerPage);
+
+  // Función para abrir el modal y establecer los opcionales
+  const openModal = (model: string) => {
+    setSelectedModel(model);
+    setOpcionalesDelModelo(
+      productos.filter((producto) => producto.Modelo === model)
+    );
+    setModalOpen(true);
+  };
+
+  // Función para cerrar el modal
+  const closeModal = () => {
+    setModalOpen(false);
+    setSelectedModel(null);
+    setOpcionalesDelModelo([]);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -111,7 +135,7 @@ export default function Calculo() {
           <BarChart3 className="h-8 w-8 text-green-600" />
           <div>
             <p className="text-sm text-gray-600">Total Items</p>
-            <p className="text-3xl font-bold">{productosFiltrados.length}</p>
+            <p className="text-3xl font-bold">{equiposPrincipales.length}</p>
           </div>
         </div>
 
@@ -132,15 +156,7 @@ export default function Calculo() {
           </div>
         </div>
 
-        {/* Estados */}
-        {loading && <p className="text-gray-600">Cargando…</p>}
-        {error && (
-          <div className="text-red-600 bg-red-50 p-4 rounded-lg mb-4">
-            Error: {error}
-          </div>
-        )}
-
-        {/* Tabla */}
+        {/* Equipos principales */}
         {!loading && !error && (
           <div className="flex-1 bg-white rounded-xl shadow-sm overflow-auto">
             {currentProductos.length === 0 ? (
@@ -154,46 +170,90 @@ export default function Calculo() {
                       <th className="px-6 py-4">Nombre</th>
                       <th className="px-6 py-4">Descripción</th>
                       <th className="px-6 py-4">Modelo</th>
+                      <th className="px-6 py-4">Opcionales</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {currentProductos.map((p) => (
-                      <tr key={p.codigo_producto} className="hover:bg-gray-50">
-                        <td className="px-6 py-3 font-mono">{p.codigo_producto}</td>
-                        <td className="px-6 py-3">{p.nombre_del_producto}</td>
-                        <td className="px-6 py-3">{p.Descripcion || <span className="text-gray-400">—</span>}</td>
-                        <td className="px-6 py-3">{p.Modelo || <span className="text-gray-400">—</span>}</td>
+                    {currentProductos.map((producto) => (
+                      <tr key={producto.codigo_producto} className="hover:bg-gray-50">
+                        <td className="px-6 py-3 font-mono">{producto.codigo_producto}</td>
+                        <td className="px-6 py-3">{producto.nombre_del_producto}</td>
+                        <td className="px-6 py-3">{producto.Descripcion || <span className="text-gray-400">—</span>}</td>
+                        <td className="px-6 py-3">{producto.Modelo || <span className="text-gray-400">—</span>}</td>
+                        <td className="px-6 py-3">
+                          <button
+                            onClick={() => openModal(producto.Modelo)}
+                            className="text-blue-600 hover:underline"
+                          >
+                            Ver opcionales
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-
-                {/* Paginación */}
-                <div className="flex justify-center items-center mt-6 space-x-4">
-                  <button
-                    className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
-                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                    disabled={currentPage === 1}
-                  >
-                    ←
-                  </button>
-
-                  <span className="text-gray-700 font-semibold">
-                    {currentPage} de {totalPages}
-                  </span>
-
-                  <button
-                    className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
-                    onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                    disabled={currentPage === totalPages}
-                  >
-                    →
-                  </button>
-                </div>
               </>
             )}
           </div>
         )}
+
+        {/* Modal para mostrar opcionales */}
+        {modalOpen && (
+          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+            <div className="bg-white p-6 rounded-xl w-1/2">
+              <h3 className="text-xl font-bold mb-4">Opcionales para {selectedModel}</h3>
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-100 text-left font-semibold text-gray-600">
+                  <tr>
+                    <th className="px-6 py-4">Código</th>
+                    <th className="px-6 py-4">Nombre</th>
+                    <th className="px-6 py-4">Descripción</th>
+                    <th className="px-6 py-4">Modelo</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {opcionalesDelModelo.map((opcional) => (
+                    <tr key={opcional.codigo_producto} className="hover:bg-gray-50">
+                      <td className="px-6 py-3 font-mono">{opcional.codigo_producto}</td>
+                      <td className="px-6 py-3">{opcional.nombre_del_producto}</td>
+                      <td className="px-6 py-3">{opcional.Descripcion || <span className="text-gray-400">—</span>}</td>
+                      <td className="px-6 py-3">{opcional.Modelo || <span className="text-gray-400">—</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <button
+                onClick={closeModal}
+                className="mt-4 bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Paginación */}
+        <div className="flex justify-center items-center mt-6 space-x-4">
+          <button
+            className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
+            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+          >
+            ←
+          </button>
+
+          <span className="text-gray-700 font-semibold">
+            {currentPage} de {totalPages}
+          </span>
+
+          <button
+            className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
+            onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+            disabled={currentPage === totalPages}
+          >
+            →
+          </button>
+        </div>
       </main>
     </div>
   );
