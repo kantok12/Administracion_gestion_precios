@@ -21,7 +21,7 @@ export default function App() {
     try {
       setLoading(true);
       const res = await fetch(
-        'https://n8n-807184488368.southamerica-west1.run.app/webhook-test/e8a792bd-edfb-48f9-89db-500eb0dcff10',
+        'https://n8n-807184488368.southamerica-west1.run.app/webhook-test/6f697684-4cfc-4bc1-8918-bfffc9f20b9f',
         { method: 'GET' }        // <-- GET porque solo quieres leer
       );
 
