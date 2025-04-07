@@ -1,14 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import {
-  DollarSign,
-  BarChart3,
-  Clock,
-  Settings,
-  BarChart2,
-  Search,
-} from 'lucide-react';
-import { Link } from 'react-router-dom';  // 👈 Importamos Link de react-router-dom
+import { BarChart3, Search } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
+// Definimos la interfaz para el producto, que será la misma para ambos, equipos y opcionales
 interface Producto {
   codigo_producto: string;
   nombre_del_producto: string;
@@ -16,31 +10,38 @@ interface Producto {
   Modelo: string;
 }
 
-export default function App() {
+export default function Calculo() {
+  // Estados para los productos
   const [productos, setProductos] = useState<Producto[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(''); // Corregido el nombre de searchTerm
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  const WEBHOOK_URL =
+  // URLs de los webhooks de Equipos y Opcionales
+  const WEBHOOK_EQUIPOS =
     'https://n8n-807184488368.southamerica-west1.run.app/webhook/6f697684-4cfc-4bc1-8918-bfffc9f20b9f';
+  const WEBHOOK_OPCIONALES =
+    'https://n8n-807184488368.southamerica-west1.run.app/webhook/ac8b70a7-6be5-4e1a-87b3-3813464dd254';
 
+  // Función para obtener los datos de productos (equipos y opcionales)
   const obtenerDatos = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(WEBHOOK_URL);
-      if (!res.ok) throw new Error(`Error ${res.status}`);
-      const ct = res.headers.get('content-type') || '';
-      if (!ct.includes('application/json')) {
-        const txt = await res.text();
-        throw new Error('Respuesta NO-JSON:\n' + txt.slice(0, 120));
-      }
-      const data: Producto[] = await res.json();
-      setProductos(data);
-      setCurrentPage(1);
+      // Obtener equipos
+      const resEquipos = await fetch(WEBHOOK_EQUIPOS);
+      if (!resEquipos.ok) throw new Error(`Error ${resEquipos.status}`);
+      const equipos: Producto[] = await resEquipos.json();
+
+      // Obtener opcionales
+      const resOpcionales = await fetch(WEBHOOK_OPCIONALES);
+      if (!resOpcionales.ok) throw new Error(`Error ${resOpcionales.status}`);
+      const opcionales: Producto[] = await resOpcionales.json();
+
+      // Combinar ambos datos
+      setProductos([...equipos, ...opcionales]);
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'Error desconocido');
@@ -69,26 +70,24 @@ export default function App() {
       {/* Sidebar */}
       <aside className="w-64 bg-white shadow-lg p-6 space-y-8">
         <header className="flex items-center gap-2">
-          <DollarSign className="h-8 w-8 text-blue-600" />
+          <BarChart3 className="h-8 w-8 text-blue-600" />
           <h1 className="text-xl font-bold">Sistema de Precios</h1>
         </header>
 
         <nav className="space-y-2">
-          {/* Botón EQUIPOS */}
           <Link
             to="/equipos"
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-50"
           >
-            <BarChart2 className="h-5 w-5" />
+            <BarChart3 className="h-5 w-5" />
             EQUIPOS
           </Link>
 
-          {/* Botón OPCIONALES */}
           <Link
             to="/opcionales"
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-50"
           >
-            <Clock className="h-5 w-5" />
+            <BarChart3 className="h-5 w-5" />
             Opcionales
           </Link>
 
@@ -97,15 +96,15 @@ export default function App() {
             to="/calculo"
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-50"
           >
-            <Clock className="h-5 w-5" />
-           calculo
+            <BarChart3 className="h-5 w-5" />
+            Cálculo
           </Link>
         </nav>
       </aside>
 
       {/* Main Panel */}
       <main className="flex-1 p-8 flex flex-col">
-        <h2 className="text-2xl font-bold mb-6">EQUIPOS</h2>
+        <h2 className="text-2xl font-bold mb-6">CÁLCULO</h2>
 
         {/* Resumen */}
         <div className="mb-6 bg-white rounded-xl shadow-sm p-6 flex items-center gap-4">
@@ -145,7 +144,7 @@ export default function App() {
         {!loading && !error && (
           <div className="flex-1 bg-white rounded-xl shadow-sm overflow-auto">
             {currentProductos.length === 0 ? (
-              <p className="text-gray-500 p-6">No hay datos disponibles.</p>
+              <p className="text-gray-500 p-6">No hay productos disponibles.</p>
             ) : (
               <>
                 <table className="min-w-full text-sm">
