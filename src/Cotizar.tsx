@@ -1,7 +1,6 @@
-// Archivo: src/App.tsx
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { DollarSign, BarChart2, Clock, Search } from "lucide-react";
+import { DollarSign, BarChart2, Clock, Search, PlusCircle, X } from "lucide-react";
 
 // Interfaces
 interface Producto {
@@ -12,13 +11,26 @@ interface Producto {
   categoria?: string;
 }
 
-export default function App() {
+interface Opcional {
+  codigo_producto: string;
+  nombre_del_producto: string;
+  Descripcion: string;
+  Modelo: string;
+}
+
+export default function Cotizar() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalData, setModalData] = useState<Opcional[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 4;
 
-  const WEBHOOK_URL_PRINCIPAL =
-    "https://n8n-807184488368.southamerica-west1.run.app/webhook/6f697684-4cfc-4bc1-8918-bfffc9f20b9f";
+  // Webhook principal
+  const WEBHOOK_URL_PRINCIPAL = "https://n8n-807184488368.southamerica-west1.run.app/webhook/6f697684-4cfc-4bc1-8918-bfffc9f20b9f";
+  const WEBHOOK_URL_OPCIONALES = "https://n8n-807184488368.southamerica-west1.run.app/webhook/ac8b70a7-6be5-4e1a-87b3-3813464dd254";
 
+  // Obtener productos
   const obtenerDatos = async () => {
     try {
       const res = await fetch(WEBHOOK_URL_PRINCIPAL);
@@ -34,10 +46,42 @@ export default function App() {
     obtenerDatos();
   }, []);
 
+  // Función para abrir modal y traer opcionales
+  const handleCotizar = async (producto: Producto) => {
+    try {
+      const url = `${WEBHOOK_URL_OPCIONALES}?codigo=${producto.codigo_producto}&modelo=${producto.Modelo}&categoria=${producto.categoria}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Error ${res.status}`);
+      const data: Opcional[] = await res.json();
+      setModalData(data);
+      setCurrentPage(1);
+      setModalVisible(true);
+    } catch (err) {
+      console.error("Error al cotizar:", err);
+    }
+  };
+
+  // Cerrar modal con ESC
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && modalVisible) {
+        setModalVisible(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [modalVisible]);
+
   const productosFiltrados = productos.filter((p) =>
     [p.codigo_producto, p.nombre_del_producto, p.Descripcion]
       .some((field) => field?.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  // Paginación para Opcionales
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentOpcionales = modalData.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(modalData.length / itemsPerPage);
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -61,7 +105,7 @@ export default function App() {
 
       {/* Main Panel */}
       <main className="flex-1 p-8 flex flex-col">
-        <h2 className="text-2xl font-bold mb-6">Cotizacion</h2>
+        <h2 className="text-2xl font-bold mb-6">Cotización</h2>
 
         {/* Search bar */}
         <div className="mb-6 relative max-w-md">
@@ -83,6 +127,7 @@ export default function App() {
                 <th className="w-24 p-4 text-left">Código</th>
                 <th className="w-1/4 p-4 text-left">Nombre</th>
                 <th className="p-4 text-left">Descripción</th>
+                <th className="w-20 p-4 text-center">Cotizar</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -91,11 +136,16 @@ export default function App() {
                   <td className="p-4 font-mono">{p.codigo_producto}</td>
                   <td className="p-4">{p.nombre_del_producto}</td>
                   <td className="p-4">{p.Descripcion}</td>
+                  <td className="p-4 text-center">
+                    <button onClick={() => handleCotizar(p)} className="text-blue-600 hover:text-blue-800">
+                      <PlusCircle className="w-5 h-5" />
+                    </button>
+                  </td>
                 </tr>
               ))}
               {productosFiltrados.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="p-4 text-center text-gray-500">
+                  <td colSpan={4} className="p-4 text-center text-gray-500">
                     No se encontraron resultados.
                   </td>
                 </tr>
@@ -104,6 +154,86 @@ export default function App() {
           </table>
         </div>
       </main>
+
+      {/* Modal de Cotización */}
+      {modalVisible && (
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="relative bg-white rounded-lg shadow-lg w-11/12 h-[90vh] p-6 flex flex-col">
+            <button
+              onClick={() => setModalVisible(false)}
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-700"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            <h2 className="text-2xl font-bold mb-4">Detalle de Cotización</h2>
+
+            {currentOpcionales.length > 0 ? (
+              <div className="flex-1 overflow-auto">
+                <table className="min-w-full text-sm border">
+                  <thead className="bg-gray-100 text-gray-600 font-semibold">
+                    <tr>
+                      <th className="p-2 border text-center">Seleccionar</th>
+                      {Object.keys(currentOpcionales[0]).map((key) => (
+                        <th key={key} className="p-2 border">
+                          {key}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentOpcionales.map((item, idx) => (
+                      <tr key={idx}>
+                        {/* Casilla de selección */}
+                        <td className="p-2 border text-center">
+                          <input type="checkbox" className="w-4 h-4" />
+                        </td>
+                        {/* Campos del objeto */}
+                        {Object.values(item).map((value, i) => (
+                          <td key={i} className="p-2 border">
+                            {String(value)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p>No hay datos disponibles.</p>
+            )}
+
+            {/* Pagination */}
+            <div className="flex justify-center items-center mt-4 space-x-4">
+              <button
+                className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+              >
+                ←
+              </button>
+              <span className="text-gray-700 font-semibold">{currentPage} de {totalPages}</span>
+              <button
+                className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+              >
+                →
+              </button>
+            </div>
+
+            {/* Botón "Calcular" */}
+            <div className="mt-6 flex justify-end">
+              <button
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                onClick={() => alert('Función calcular aquí')}
+              >
+                Calcular
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
