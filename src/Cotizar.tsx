@@ -1,8 +1,8 @@
+// Archivo: src/Cotizar.tsx
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { DollarSign, BarChart2, Clock, Search, PlusCircle, X } from "lucide-react";
 
-// Interfaces
 interface Producto {
   codigo_producto: string;
   nombre_del_producto: string;
@@ -23,31 +23,31 @@ export default function Cotizar() {
   const [searchTerm, setSearchTerm] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
   const [modalData, setModalData] = useState<Opcional[]>([]);
+  const [selectedOpcionales, setSelectedOpcionales] = useState<Opcional[]>([]);
+  const [productoSeleccionado, setProductoSeleccionado] = useState<Producto | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 4;
+  const navigate = useNavigate();
 
-  // Webhook principal
   const WEBHOOK_URL_PRINCIPAL = "https://n8n-807184488368.southamerica-west1.run.app/webhook/6f697684-4cfc-4bc1-8918-bfffc9f20b9f";
   const WEBHOOK_URL_OPCIONALES = "https://n8n-807184488368.southamerica-west1.run.app/webhook/ac8b70a7-6be5-4e1a-87b3-3813464dd254";
 
-  // Obtener productos
-  const obtenerDatos = async () => {
-    try {
-      const res = await fetch(WEBHOOK_URL_PRINCIPAL);
-      if (!res.ok) throw new Error(`Error ${res.status}`);
-      const data: Producto[] = await res.json();
-      setProductos(data);
-    } catch (err) {
-      console.error("Error:", err);
-    }
-  };
-
   useEffect(() => {
+    const obtenerDatos = async () => {
+      try {
+        const res = await fetch(WEBHOOK_URL_PRINCIPAL);
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        const data: Producto[] = await res.json();
+        setProductos(data);
+      } catch (err) {
+        console.error("Error:", err);
+      }
+    };
     obtenerDatos();
   }, []);
 
-  // Función para abrir modal y traer opcionales
   const handleCotizar = async (producto: Producto) => {
+    setProductoSeleccionado(producto);
     try {
       const url = `${WEBHOOK_URL_OPCIONALES}?codigo=${producto.codigo_producto}&modelo=${producto.Modelo}&categoria=${producto.categoria}`;
       const res = await fetch(url);
@@ -56,12 +56,33 @@ export default function Cotizar() {
       setModalData(data);
       setCurrentPage(1);
       setModalVisible(true);
+      setSelectedOpcionales([]);
     } catch (err) {
       console.error("Error al cotizar:", err);
     }
   };
 
-  // Cerrar modal con ESC
+  const handleCheckboxChange = (opcional: Opcional) => {
+    setSelectedOpcionales((prev) => {
+      const exists = prev.find((item) => item.codigo_producto === opcional.codigo_producto);
+      if (exists) {
+        return prev.filter((item) => item.codigo_producto !== opcional.codigo_producto);
+      } else {
+        return [...prev, opcional];
+      }
+    });
+  };
+
+  const handleCalcular = () => {
+    if (!productoSeleccionado) return;
+    navigate("/calculo", {
+      state: {
+        productoPrincipal: productoSeleccionado,
+        opcionalesSeleccionados: selectedOpcionales,
+      },
+    });
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && modalVisible) {
@@ -73,11 +94,11 @@ export default function Cotizar() {
   }, [modalVisible]);
 
   const productosFiltrados = productos.filter((p) =>
-    [p.codigo_producto, p.nombre_del_producto, p.Descripcion]
-      .some((field) => field?.toLowerCase().includes(searchTerm.toLowerCase()))
+    [p.codigo_producto, p.nombre_del_producto, p.Descripcion].some((field) =>
+      field?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
   );
 
-  // Paginación para Opcionales
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentOpcionales = modalData.slice(indexOfFirstItem, indexOfLastItem);
@@ -93,12 +114,10 @@ export default function Cotizar() {
         </header>
         <nav className="space-y-2">
           <Link to="/equipos" className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100">
-            <BarChart2 className="h-5 w-5" />
-            EQUIPOS
+            <BarChart2 className="h-5 w-5" /> EQUIPOS
           </Link>
           <Link to="/cotizar" className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-100">
-            <Clock className="h-5 w-5" />
-            COTIZAR
+            <Clock className="h-5 w-5" /> COTIZAR
           </Link>
         </nav>
       </aside>
@@ -106,8 +125,6 @@ export default function Cotizar() {
       {/* Main Panel */}
       <main className="flex-1 p-8 flex flex-col">
         <h2 className="text-2xl font-bold mb-6">Cotización</h2>
-
-        {/* Search bar */}
         <div className="mb-6 relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
@@ -159,13 +176,9 @@ export default function Cotizar() {
       {modalVisible && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-black bg-opacity-50">
           <div className="relative bg-white rounded-lg shadow-lg w-11/12 h-[90vh] p-6 flex flex-col">
-            <button
-              onClick={() => setModalVisible(false)}
-              className="absolute top-3 right-3 text-gray-400 hover:text-gray-700"
-            >
+            <button onClick={() => setModalVisible(false)} className="absolute top-3 right-3 text-gray-400 hover:text-gray-700">
               <X className="w-6 h-6" />
             </button>
-
             <h2 className="text-2xl font-bold mb-4">Detalle de Cotización</h2>
 
             {currentOpcionales.length > 0 ? (
@@ -174,26 +187,27 @@ export default function Cotizar() {
                   <thead className="bg-gray-100 text-gray-600 font-semibold">
                     <tr>
                       <th className="p-2 border text-center">Seleccionar</th>
-                      {Object.keys(currentOpcionales[0]).map((key) => (
-                        <th key={key} className="p-2 border">
-                          {key}
-                        </th>
-                      ))}
+                      <th className="p-2 border">codigo_producto</th>
+                      <th className="p-2 border">nombre_del_producto</th>
+                      <th className="p-2 border">Descripcion</th>
+                      <th className="p-2 border">Modelo</th>
                     </tr>
                   </thead>
                   <tbody>
                     {currentOpcionales.map((item, idx) => (
                       <tr key={idx}>
-                        {/* Casilla de selección */}
                         <td className="p-2 border text-center">
-                          <input type="checkbox" className="w-4 h-4" />
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4"
+                            checked={selectedOpcionales.some(op => op.codigo_producto === item.codigo_producto)}
+                            onChange={() => handleCheckboxChange(item)}
+                          />
                         </td>
-                        {/* Campos del objeto */}
-                        {Object.values(item).map((value, i) => (
-                          <td key={i} className="p-2 border">
-                            {String(value)}
-                          </td>
-                        ))}
+                        <td className="p-2 border">{item.codigo_producto}</td>
+                        <td className="p-2 border">{item.nombre_del_producto}</td>
+                        <td className="p-2 border">{item.Descripcion}</td>
+                        <td className="p-2 border">{item.Modelo}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -209,27 +223,21 @@ export default function Cotizar() {
                 className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
                 onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
-              >
-                ←
-              </button>
+              >←</button>
               <span className="text-gray-700 font-semibold">{currentPage} de {totalPages}</span>
               <button
                 className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
                 onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                 disabled={currentPage === totalPages}
-              >
-                →
-              </button>
+              >→</button>
             </div>
 
             {/* Botón "Calcular" */}
             <div className="mt-6 flex justify-end">
               <button
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                onClick={() => alert('Función calcular aquí')}
-              >
-                Calcular
-              </button>
+                onClick={handleCalcular}
+              >Calcular</button>
             </div>
           </div>
         </div>

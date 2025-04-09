@@ -1,17 +1,20 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';  // 👈 Importa react-router-dom
-import App from './App';  // Página de Equipos
-import './index.css';  // 👈 Tailwind o tu CSS base
-import Cotizar from './Cotizar';
+// main.tsx
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <BrowserRouter>
-      <Routes>
-        <Route path="/equipos" element={<App />} />           {/* Página de Equipos */}
-        <Route path="/cotizar" element={<Cotizar />} />                {/* Redireccionar cualquier otra ruta a Equipos */}
-      </Routes>
-    </BrowserRouter>
-  </React.StrictMode>
+import App from "./App";
+import Cotizar from "./Cotizar";
+import Calculo from "./Calculo"; // 👈 IMPORTAR
+
+import "./index.css";
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <BrowserRouter>
+    <Routes>
+      <Route path="/equipos" element={<App />} />
+      <Route path="/cotizar" element={<Cotizar />} />
+      <Route path="/calculo" element={<Calculo />} /> {/* 👈 NUEVA RUTA */}
+    </Routes>
+  </BrowserRouter>
 );
