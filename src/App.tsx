@@ -13,6 +13,8 @@ import {
   RefreshCw,
   Info,
   Calculator,
+  MessageCircle,
+  Send,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import LogoEcoAlliance from './components/LogoEcoAlliance';
@@ -81,6 +83,102 @@ export default function App() {
 
   const WEBHOOK_URL_VER_DETALLE =
     'https://n8n-807184488368.southamerica-west1.run.app/webhook/c02247e7-84f0-49b3-a2df-28817da48017';
+
+  // Chat state
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatMessage, setChatMessage] = useState('');
+  const [chatHistory, setChatHistory] = useState<{type: 'user' | 'support', text: string}[]>([
+    {type: 'support', text: '¡Hola! ¿En qué podemos ayudarte hoy?'}
+  ]);
+  const [chatSessionId, setChatSessionId] = useState<string | null>(null);
+  
+  const toggleChat = () => {
+    setIsChatOpen(!isChatOpen);
+    
+    // Si se está cerrando el chat, limpiar el sessionId
+    if (isChatOpen) {
+      setChatSessionId(null);
+    } else {
+      // Si se está abriendo el chat, generar un nuevo sessionId
+      const newSessionId = Math.random().toString(36).substring(2, 15) + 
+                          Math.random().toString(36).substring(2, 15);
+      setChatSessionId(newSessionId);
+    }
+  };
+  
+  const handleSendMessage = () => {
+    if (chatMessage.trim() === '') return;
+    
+    // Add user message to chat
+    setChatHistory(prev => [...prev, { type: 'user', text: chatMessage }]);
+    
+    // Send message to webhook
+    const WEBHOOK_URL_CHAT = 'https://n8n-807184488368.southamerica-west1.run.app/webhook/57492d25-2a87-4698-aa6d-42248acec7b9';
+    
+    // Usar el sessionId existente o generar uno nuevo si no existe
+    const sessionId = chatSessionId || 
+      Math.random().toString(36).substring(2, 15) + 
+      Math.random().toString(36).substring(2, 15);
+    
+    // Guardar el sessionId para futuras interacciones
+    if (!chatSessionId) {
+      setChatSessionId(sessionId);
+    }
+    
+    // Crear los parámetros para la URL
+    const params = new URLSearchParams({
+      sessionId: sessionId,
+      action: 'sendMessage',
+      chatInput: chatMessage
+    });
+    
+    // Construir la URL con los parámetros
+    const url = `${WEBHOOK_URL_CHAT}?${params.toString()}`;
+    
+    console.log('Enviando al webhook (GET):', url);
+    
+    fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Error del servidor: ${response.status} - ${response.statusText}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        console.log('Respuesta del servidor:', data); // Para depuración
+        if (data && Array.isArray(data) && data.length > 0 && data[0].output) {
+          // Si la respuesta viene en formato [{ output: "respuesta" }]
+          setChatHistory(prev => [...prev, { type: 'support', text: data[0].output }]);
+        } else {
+          console.error('Respuesta del servidor sin formato esperado:', data);
+          setChatHistory(prev => [...prev, { 
+            type: 'support', 
+            text: `Error: La respuesta del servidor no tiene el formato esperado. Datos recibidos: ${JSON.stringify(data)}` 
+          }]);
+        }
+      })
+      .catch(error => {
+        console.error('Error detallado:', error);
+        setChatHistory(prev => [...prev, { 
+          type: 'support', 
+          text: `Error de conexión: ${error.message}. Por favor, verifica la conexión e intenta nuevamente.` 
+        }]);
+      });
+    
+    setChatMessage('');
+  };
+  
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
 
   // ========== 1) Carga inicial de productos ==========
   const obtenerDatos = async () => {
@@ -666,6 +764,67 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* Chat Button and Chat Window */}
+      <div className="fixed bottom-8 right-8 z-50">
+        {/* Chat Button */}
+        <button
+          onClick={toggleChat}
+          className={`flex items-center justify-center p-4 rounded-full shadow-lg transition-colors ${
+            isChatOpen ? 'bg-red-500 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'
+          }`}
+          aria-label="Abrir chat"
+        >
+          {isChatOpen ? <X size={20} /> : <MessageCircle size={20} />}
+        </button>
+
+        {/* Chat Panel */}
+        {isChatOpen && (
+          <div className="absolute bottom-16 right-0 w-96 bg-white rounded-lg shadow-xl overflow-hidden border border-gray-200 flex flex-col animate-scaleIn">
+            {/* Header */}
+            <div className="bg-blue-600 p-4 text-white flex justify-between items-center">
+              <h3 className="font-medium text-lg">Soporte EcoAlliance</h3>
+              <button onClick={toggleChat} className="text-white hover:text-gray-200">
+                <X size={18} />
+              </button>
+            </div>
+            
+            {/* Chat Messages */}
+            <div className="flex-1 p-4 max-h-[400px] overflow-y-auto flex flex-col space-y-4">
+              {chatHistory.map((msg, index) => (
+                <div 
+                  key={index}
+                  className={`p-4 rounded-lg max-w-[80%] ${
+                    msg.type === 'user' 
+                      ? 'bg-blue-100 ml-auto rounded-tr-none' 
+                      : 'bg-gray-100 rounded-tl-none'
+                  }`}
+                >
+                  {msg.text}
+                </div>
+              ))}
+            </div>
+            
+            {/* Input Area */}
+            <div className="border-t border-gray-200 p-4 flex">
+              <textarea
+                value={chatMessage}
+                onChange={(e) => setChatMessage(e.target.value)}
+                onKeyDown={handleKeyPress}
+                placeholder="Escribe tu mensaje..."
+                className="flex-1 border border-gray-300 rounded-l-md px-4 py-3 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+                rows={2}
+              />
+              <button
+                onClick={handleSendMessage}
+                className="bg-blue-600 text-white px-4 rounded-r-md hover:bg-blue-700"
+              >
+                <Send size={20} />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Modal de Opcionales */}
       {showModal && productoSeleccionado && (
