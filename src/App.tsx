@@ -7,8 +7,15 @@ import {
   Search,
   PlusCircle,
   X,
+  Settings,
+  Filter,
+  Loader,
+  RefreshCw,
+  Info,
+  Calculator,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import LogoEcoAlliance from './components/LogoEcoAlliance';
 
 // Interfaces
 interface Producto {
@@ -27,11 +34,17 @@ interface Opcional {
 }
 
 export default function App() {
+  const navigate = useNavigate();
+  
   // ----------- Estados principales -----------
   const [productos, setProductos] = useState<Producto[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Filtro por categoría
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<string>('todas');
+  const [categorias, setCategorias] = useState<string[]>(['todas']);
 
   // Paginación de productos
   const [currentPage, setCurrentPage] = useState(1);
@@ -46,12 +59,18 @@ export default function App() {
   const [opcionalesPage, setOpcionalesPage] = useState(1);
   const opcionalesPerPage = 10;
 
-  // Selección de producto al hacer clic en la fila (para "Cotizar")
-  const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null);
+  // Estados para cotización
+  const [showCotizarModal, setShowCotizarModal] = useState(false);
+  const [selectedOpcionales, setSelectedOpcionales] = useState<Opcional[]>([]);
 
   // ----------- Modal para "Ver Detalle" con JSON aplanado -----------
   const [showJsonModal, setShowJsonModal] = useState(false);
   const [flattenedData, setFlattenedData] = useState<Record<string, any>>({});
+
+  // Estados de carga para acciones específicas
+  const [loadingDetail, setLoadingDetail] = useState<string | null>(null);
+  const [loadingOpcionales, setLoadingOpcionales] = useState<string | null>(null);
+  const [loadingCotizar, setLoadingCotizar] = useState<string | null>(null);
 
   // ----------- Webhooks -----------
   const WEBHOOK_URL_PRINCIPAL =
@@ -71,6 +90,16 @@ export default function App() {
       const res = await fetch(WEBHOOK_URL_PRINCIPAL);
       if (!res.ok) throw new Error(`Error ${res.status}`);
       const data: Producto[] = await res.json();
+      
+      // Extraer categorías únicas para el filtro
+      const todasCategorias = ['todas'];
+      data.forEach(producto => {
+        if (producto.categoria && !todasCategorias.includes(producto.categoria)) {
+          todasCategorias.push(producto.categoria);
+        }
+      });
+      setCategorias(todasCategorias);
+      
       setProductos(data);
       setCurrentPage(1);
     } catch (err: any) {
@@ -88,20 +117,15 @@ export default function App() {
   // ========== 2) Cerrar modales al presionar ESC ==========
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Cierra modal de opcionales
-      if (e.key === 'Escape' && showModal) {
-        handleCloseModal();
-      }
-      // Cierra modal de JSON
-      if (e.key === 'Escape' && showJsonModal) {
-        setShowJsonModal(false);
+      if (e.key === 'Escape') {
+        if (showModal) handleCloseModal();
+        if (showJsonModal) setShowJsonModal(false);
+        if (showCotizarModal) handleCloseCotizarModal();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [showModal, showJsonModal]);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showModal, showJsonModal, showCotizarModal]);
 
   // ========== 3) Función recursiva para aplanar objetos ==========
   const flattenObject = (obj: any): Record<string, any> => {
@@ -124,6 +148,7 @@ export default function App() {
 
   // ========== 4) "Ver Detalle" con GET y modal JSON aplanado ==========
   const handleVerDetalle = async (producto: Producto) => {
+    setLoadingDetail(producto.codigo_producto);
     try {
       const url = `${WEBHOOK_URL_VER_DETALLE}?codigo=${producto.codigo_producto}&modelo=${producto.Modelo}&categoria=${producto.categoria}`;
       const response = await fetch(url);
@@ -131,34 +156,78 @@ export default function App() {
         throw new Error('Error al enviar la solicitud');
       }
 
-      // Tomamos la respuesta (array u objeto)
       const data = await response.json();
       const firstItem = Array.isArray(data) ? data[0] : data;
-
-      // Aplanamos
       const flattened = flattenObject(firstItem || {});
       setFlattenedData(flattened);
-
-      // Mostramos el modal
       setShowJsonModal(true);
     } catch (error) {
       console.error('Error al hacer la solicitud:', error);
       alert('Hubo un error al procesar la solicitud');
+    } finally {
+      setLoadingDetail(null);
     }
   };
 
   // ========== 5) Filtrar y paginar la tabla principal ==========
-  const productosFiltrados = productos.filter((p) =>
+  const productosFiltrados = productos.filter((p) => 
+    // Filtro de búsqueda por texto
     [p.codigo_producto, p.nombre_del_producto, p.Descripcion, p.Modelo]
-      .some((field) => field.toLowerCase().includes(searchTerm.toLowerCase()))
+      .some((field) => field.toLowerCase().includes(searchTerm.toLowerCase())) &&
+    // Filtro por categoría
+    (categoriaSeleccionada === 'todas' || p.categoria === categoriaSeleccionada)
   );
+  
+  // Ordenar resultados para priorizar coincidencias exactas de código
+  const productosOrdenados = [...productosFiltrados].sort((a, b) => {
+    // Si hay un término de búsqueda y coincide exactamente con el código del producto a, a va primero
+    if (searchTerm && a.codigo_producto.toLowerCase() === searchTerm.toLowerCase()) return -1;
+    // Si hay un término de búsqueda y coincide exactamente con el código del producto b, b va primero
+    if (searchTerm && b.codigo_producto.toLowerCase() === searchTerm.toLowerCase()) return 1;
+    // Si hay un término de búsqueda y está contenido en el código del producto a, a va primero
+    if (searchTerm && a.codigo_producto.toLowerCase().includes(searchTerm.toLowerCase()) && 
+        !b.codigo_producto.toLowerCase().includes(searchTerm.toLowerCase())) return -1;
+    // Si hay un término de búsqueda y está contenido en el código del producto b, b va primero
+    if (searchTerm && b.codigo_producto.toLowerCase().includes(searchTerm.toLowerCase()) && 
+        !a.codigo_producto.toLowerCase().includes(searchTerm.toLowerCase())) return 1;
+    // Orden alfabético por defecto
+    return a.codigo_producto.localeCompare(b.codigo_producto);
+  });
+  
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentProductos = productosFiltrados.slice(indexOfFirstItem, indexOfLastItem);
+  const currentProductos = productosOrdenados.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(productosFiltrados.length / itemsPerPage);
+
+  // Estado para resaltar filas con coincidencia exacta
+  const [highlightedProducto, setHighlightedProducto] = useState<string | null>(null);
+  
+  // Actualizar highlighted cuando cambia searchTerm
+  useEffect(() => {
+    if (searchTerm) {
+      const exactMatch = productos.find(p => 
+        p.codigo_producto.toLowerCase() === searchTerm.toLowerCase()
+      );
+      setHighlightedProducto(exactMatch ? exactMatch.codigo_producto : null);
+      
+      // Si hay coincidencia exacta, mover a la página correcta
+      if (exactMatch) {
+        const index = productosFiltrados.findIndex(
+          p => p.codigo_producto === exactMatch.codigo_producto
+        );
+        if (index !== -1) {
+          const page = Math.floor(index / itemsPerPage) + 1;
+          setCurrentPage(page);
+        }
+      }
+    } else {
+      setHighlightedProducto(null);
+    }
+  }, [searchTerm]);
 
   // ========== 6) Modal de Opcionales (botón "+") ==========
   const handleOpenModal = async (producto: Producto) => {
+    setLoadingOpcionales(producto.codigo_producto);
     setProductoSeleccionado(producto);
     setOpcionalesPage(1);
 
@@ -173,12 +242,13 @@ export default function App() {
       if (!resp.ok) throw new Error(`Error al obtener opcionales: ${resp.status}`);
       const data: Opcional[] = await resp.json();
       setOpcionalesData(data);
+      setShowModal(true);
     } catch (err) {
       console.error('Error cargando opcionales:', err);
       setOpcionalesData(null);
+    } finally {
+      setLoadingOpcionales(null);
     }
-
-    setShowModal(true);
   };
 
   // Cerrar modal de Opcionales
@@ -186,6 +256,61 @@ export default function App() {
     setShowModal(false);
     setProductoSeleccionado(null);
     setOpcionalesData(null);
+  };
+
+  // ========== 7) Funciones de Cotización ==========
+  const handleCotizar = async (producto: Producto) => {
+    setLoadingCotizar(producto.codigo_producto);
+    setProductoSeleccionado(producto);
+    setOpcionalesPage(1);
+    setSelectedOpcionales([]);
+
+    const codigoParam = encodeURIComponent(producto.codigo_producto);
+    const modeloParam = encodeURIComponent(producto.Modelo || '');
+    const categoriaParam = encodeURIComponent(producto.categoria || '');
+
+    try {
+      const resp = await fetch(
+        `${WEBHOOK_URL_OPCIONALES}?codigo=${codigoParam}&modelo=${modeloParam}&categoria=${categoriaParam}`
+      );
+      if (!resp.ok) throw new Error(`Error al obtener opcionales: ${resp.status}`);
+      const data: Opcional[] = await resp.json();
+      setOpcionalesData(data);
+      setShowCotizarModal(true);
+    } catch (err) {
+      console.error('Error cargando opcionales:', err);
+      setOpcionalesData(null);
+    } finally {
+      setLoadingCotizar(null);
+    }
+  };
+
+  const handleCloseCotizarModal = () => {
+    setShowCotizarModal(false);
+    setProductoSeleccionado(null);
+    setOpcionalesData(null);
+    setSelectedOpcionales([]);
+  };
+
+  const handleCheckboxChange = (opcional: Opcional) => {
+    setSelectedOpcionales((prev) => {
+      const exists = prev.find((item) => item.codigo_producto === opcional.codigo_producto);
+      if (exists) {
+        return prev.filter((item) => item.codigo_producto !== opcional.codigo_producto);
+      } else {
+        return [...prev, opcional];
+      }
+    });
+  };
+
+  const handleCalcular = () => {
+    if (!productoSeleccionado) return;
+    navigate('/calculo', {
+      state: {
+        productoPrincipal: productoSeleccionado,
+        opcionalesSeleccionados: selectedOpcionales,
+      },
+    });
   };
 
   // Paginación de Opcionales
@@ -197,81 +322,130 @@ export default function App() {
     ? Math.ceil(opcionalesData.length / opcionalesPerPage)
     : 0;
 
-  // ========== 7) Selección de Fila (omitir botones) ==========
-  const handleRowClick = (
-    e: React.MouseEvent<HTMLTableRowElement, MouseEvent>,
-    producto: Producto
-  ) => {
-    // Si clic en un button, no seleccionamos
-    if ((e.target as HTMLElement).closest('button')) {
-      return;
-    }
-    setSelectedProduct(producto);
-  };
-
-  // ========== 8) Botón "Cotizar" => redirigir a otra ruta ==========
-  const handleCotizar = () => {
-    if (!selectedProduct) return;
-    window.location.href = '/cotizar';
-  };
-
-  // -----------------------------------------------------------
-  // Render Principal
-  // -----------------------------------------------------------
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
-      <aside className="w-64 bg-white shadow-lg p-6 space-y-8">
-        <header className="flex items-center gap-2">
-          <DollarSign className="h-8 w-8 text-blue-600" />
-          <h1 className="text-xl font-bold">Sistema de Precios</h1>
+      <aside className="w-56 bg-white shadow-md p-4 flex flex-col">
+        <header className="mb-4">
+          <LogoEcoAlliance className="h-20 ml-0" />
         </header>
 
         {/* Menú Lateral */}
-        <nav className="space-y-2">
+        <nav className="space-y-1 mt-4 flex-1">
+          <Link
+            to="/"
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-gray-50"
+          >
+            <BarChart3 className="h-4 w-4" />
+            DASHBOARD
+          </Link>
           <Link
             to="/equipos"
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-50"
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-blue-50 text-blue-600"
           >
-            <BarChart2 className="h-5 w-5" />
+            <BarChart2 className="h-4 w-4" />
             EQUIPOS
           </Link>
-
-          {/* NUEVO: Botón para ir a "/cotizar" */}
-          <Link
-            to="/cotizar"
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-50"
-          >
-            <Clock className="h-5 w-5" />
-            COTIZAR
-          </Link>
         </nav>
+        
+        {/* Botón de configuración en la parte inferior */}
+        <div className="pt-2 border-t mt-auto">
+          <Link
+            to="/configuracion"
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-gray-50"
+          >
+            <Settings className="h-4 w-4" />
+            CONFIGURACIÓN
+          </Link>
+        </div>
       </aside>
 
       {/* Panel Principal */}
-      <main className="flex-1 p-8 flex flex-col">
+      <main className="flex-1 p-4 flex flex-col max-h-screen overflow-auto">
         <h2 className="text-2xl font-bold mb-6">EQUIPOS</h2>
 
-        {/* Barra de búsqueda */}
-        <div className="mb-6 flex items-center gap-2">
+        {/* Barra de búsqueda y filtros */}
+        <div className="mb-6 flex items-center gap-4 flex-wrap">
           <div className="relative flex-1 max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
             <input
               type="text"
-              placeholder="Buscar producto..."
+              placeholder="Buscar por código o nombre..."
               className="pl-10 pr-4 py-2 border rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
+              onKeyUp={(e) => {
+                if (e.key === 'Enter') {
+                  // Priorizar búsqueda por código exacto
+                  const exactCodeMatch = productos.find(
+                    p => p.codigo_producto.toLowerCase() === searchTerm.toLowerCase()
+                  );
+                  if (exactCodeMatch) {
+                    const index = productosFiltrados.findIndex(
+                      p => p.codigo_producto === exactCodeMatch.codigo_producto
+                    );
+                    if (index !== -1) {
+                      const page = Math.floor(index / itemsPerPage) + 1;
+                      setCurrentPage(page);
+                    }
+                  }
+                }
+              }}
             />
+            <div className="absolute right-0 top-0 h-full flex items-center mr-2">
+              <div className="group relative">
+                <Info className="h-4 w-4 text-gray-400 hover:text-blue-500 cursor-help" />
+                <div className="absolute z-10 w-60 p-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity -right-2 top-full mt-1 pointer-events-none">
+                  <p className="mb-1 font-semibold">Búsqueda inteligente:</p>
+                  <ul className="list-disc pl-4 space-y-1">
+                    <li>Busque por <b>código exacto</b> para localización inmediata</li>
+                    <li>También puede buscar por nombre o descripción</li>
+                    <li>Presione Enter para saltar a coincidencias exactas</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Filter className="h-5 w-5 text-gray-600" />
+            <div className="relative">
+              <select
+                className="appearance-none border rounded-lg py-2 pl-3 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                value={categoriaSeleccionada}
+                onChange={(e) => {
+                  setCategoriaSeleccionada(e.target.value);
+                  setCurrentPage(1);
+                }}
+              >
+                {categorias.map((categoria, index) => (
+                  <option key={index} value={categoria}>
+                    {categoria === 'todas' ? 'Todas las categorías' : categoria}
+                  </option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                  <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                </svg>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Tabla Principal */}
-        {!loading && !error && (
+        {/* Indicador de carga */}
+        {loading && (
           <div className="flex-1 bg-white rounded-xl shadow-sm overflow-auto">
+            <div className="p-4 border-b border-gray-200 flex items-center space-x-2">
+              <div className="animate-spin">
+                <Loader className="h-4 w-4 text-blue-600" />
+              </div>
+              <p className="text-sm text-gray-600">Cargando equipos...</p>
+            </div>
+            
             <table className="min-w-full text-sm">
               <thead className="bg-gray-100 text-left font-semibold text-gray-600">
                 <tr>
@@ -282,42 +456,187 @@ export default function App() {
                   <th className="px-6 py-4">Categoría</th>
                   <th className="px-6 py-4 text-center">Ver Detalle</th>
                   <th className="px-6 py-4 text-center">Opcionales</th>
+                  <th className="px-6 py-4 text-center">Cotizar</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {[...Array(5)].map((_, index) => (
+                  <tr key={index} className="animate-pulse">
+                    <td className="px-6 py-3">
+                      <div className="h-4 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-16"></div>
+                    </td>
+                    <td className="px-6 py-3">
+                      <div className="h-4 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-32"></div>
+                    </td>
+                    <td className="px-6 py-3">
+                      <div className="h-4 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-48 md:w-32 lg:w-48"></div>
+                    </td>
+                    <td className="px-6 py-3">
+                      <div className="h-4 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-20"></div>
+                    </td>
+                    <td className="px-6 py-3">
+                      <div className="h-4 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-20"></div>
+                    </td>
+                    <td className="px-6 py-3 text-center">
+                      <div className="h-4 bg-gradient-to-r from-blue-100 to-blue-200 rounded w-16 mx-auto"></div>
+                    </td>
+                    <td className="px-6 py-3 text-center">
+                      <div className="h-6 w-20 bg-gradient-to-r from-blue-100 to-blue-200 rounded-full mx-auto"></div>
+                    </td>
+                    <td className="px-6 py-3 text-center">
+                      <div className="h-4 bg-gradient-to-r from-blue-100 to-blue-200 rounded w-16 mx-auto"></div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Mensaje de error */}
+        {!loading && error && (
+          <div className="flex-1 flex flex-col items-center justify-center space-y-4 bg-red-50 p-6 rounded-xl">
+            <div className="text-red-500">
+              <X className="h-12 w-12" />
+            </div>
+            <p className="text-lg text-red-600 font-medium">Error al cargar datos</p>
+            <p className="text-sm text-red-500">{error}</p>
+            <button 
+              onClick={obtenerDatos}
+              className="px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
+
+        {/* Tabla Principal */}
+        {!loading && !error && (
+          <div className="flex-1 bg-white rounded-xl shadow-sm overflow-auto">
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+              <p className="text-sm text-gray-600">
+                {highlightedProducto ? (
+                  <span className="flex items-center gap-1">
+                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-md font-medium">Código encontrado</span> 
+                    Mostrando resultados para <span className="font-mono font-medium">{searchTerm}</span>
+                  </span>
+                ) : (
+                  <span>
+                    Mostrando <span className="font-semibold">{productosFiltrados.length}</span> 
+                    {categoriaSeleccionada !== 'todas' ? 
+                      ` equipos en la categoría "${categoriaSeleccionada}"` : 
+                      ' equipos'} 
+                    {searchTerm && ` con "${searchTerm}"`}
+                  </span>
+                )}
+              </p>
+              
+              <button 
+                onClick={obtenerDatos}
+                className="flex items-center gap-1 text-xs px-2 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Actualizar
+              </button>
+            </div>
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-100 text-left font-semibold text-gray-600">
+                <tr>
+                  <th className="px-6 py-4">Código</th>
+                  <th className="px-6 py-4">Nombre</th>
+                  <th className="px-6 py-4">Descripción</th>
+                  <th className="px-6 py-4">Modelo</th>
+                  <th className="px-6 py-4">Categoría</th>
+                  <th className="px-6 py-4 text-center">Ver Detalle</th>
+                  <th className="px-6 py-4 text-center">Opcionales</th>
+                  <th className="px-6 py-4 text-center">Cotizar</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {currentProductos.map((p) => (
                   <tr
                     key={p.codigo_producto}
-                    className="hover:bg-gray-50"
-                    onClick={(e) => handleRowClick(e, p)}
-                    style={{ cursor: 'pointer' }}
+                    className={`hover:bg-gray-50 ${highlightedProducto === p.codigo_producto ? 'bg-blue-100 shadow-sm' : ''}`}
                   >
-                    <td className="px-6 py-3 font-mono">{p.codigo_producto}</td>
+                    <td className="px-6 py-3 font-mono bg-blue-50 text-blue-800 font-medium border-l-2 border-blue-200 tracking-wider">{p.codigo_producto}</td>
                     <td className="px-6 py-3">{p.nombre_del_producto}</td>
                     <td className="px-6 py-3">
                       {p.Descripcion || <span className="text-gray-400">—</span>}
                     </td>
                     <td className="px-6 py-3">{p.Modelo || <span className="text-gray-400">—</span>}</td>
-                    <td className="px-6 py-3">{p.categoria || <span className="text-gray-400">—</span>}</td>
-
+                    <td className="px-6 py-3">
+                      {p.categoria ? (
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                          p.categoria === 'Chipeadora' ? 'bg-green-100 text-green-800' :
+                          p.categoria === 'Trituradora' ? 'bg-blue-100 text-blue-800' :
+                          p.categoria === 'Astilladora' ? 'bg-purple-100 text-purple-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {p.categoria}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
+                    
                     {/* Botón "Ver Detalle" */}
                     <td className="px-6 py-3 text-center">
-                      <button
-                        onClick={() => handleVerDetalle(p)}
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        Ver Detalle
-                      </button>
+                      <div className="relative inline-block group">
+                        <button
+                          onClick={() => handleVerDetalle(p)}
+                          className={`flex items-center justify-center ${loadingDetail === p.codigo_producto ? 'opacity-70' : ''}`}
+                          disabled={loadingDetail === p.codigo_producto}
+                        >
+                          {loadingDetail === p.codigo_producto ? (
+                            <Loader className="text-blue-600 animate-spin w-5 h-5" />
+                          ) : (
+                            <Info className="text-blue-600 hover:text-blue-800 w-5 h-5" />
+                          )}
+                        </button>
+                        <div className="absolute z-10 w-40 p-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity -bottom-10 left-1/2 transform -translate-x-1/2 pointer-events-none">
+                          Ver especificaciones técnicas completas
+                        </div>
+                      </div>
                     </td>
 
                     {/* Botón "Opcionales" */}
                     <td className="px-6 py-3 text-center">
-                      <button
-                        onClick={() => handleOpenModal(p)}
-                        className="inline-flex items-center justify-center"
-                      >
-                        <PlusCircle className="text-blue-600 hover:text-blue-800 w-5 h-5" />
-                      </button>
+                      <div className="relative inline-block group">
+                        <button
+                          onClick={() => handleOpenModal(p)}
+                          className={`flex items-center justify-center ${loadingOpcionales === p.codigo_producto ? 'opacity-70' : ''}`}
+                          disabled={loadingOpcionales === p.codigo_producto}
+                        >
+                          {loadingOpcionales === p.codigo_producto ? (
+                            <Loader className="text-blue-600 animate-spin w-5 h-5" />
+                          ) : (
+                            <PlusCircle className="text-blue-600 hover:text-blue-800 w-5 h-5" />
+                          )}
+                        </button>
+                        <div className="absolute z-10 w-40 p-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity -bottom-10 left-1/2 transform -translate-x-1/2 pointer-events-none">
+                          Ver opcionales disponibles
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Botón "Cotizar" */}
+                    <td className="px-6 py-3 text-center">
+                      <div className="relative inline-block group">
+                        <button
+                          onClick={() => handleCotizar(p)}
+                          className={`flex items-center justify-center ${loadingCotizar === p.codigo_producto ? 'opacity-70' : ''}`}
+                          disabled={loadingCotizar === p.codigo_producto}
+                        >
+                          {loadingCotizar === p.codigo_producto ? (
+                            <Loader className="text-blue-600 animate-spin w-5 h-5" />
+                          ) : (
+                            <Calculator className="text-blue-600 hover:text-blue-800 w-5 h-5" />
+                          )}
+                        </button>
+                        <div className="absolute z-10 w-40 p-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity -bottom-10 left-1/2 transform -translate-x-1/2 pointer-events-none">
+                          Crear cotización con opcionales
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -346,78 +665,66 @@ export default function App() {
             </div>
           </div>
         )}
-
-        {/* Botón "Cotizar" si hay fila seleccionada */}
-        {selectedProduct && (
-          <div className="mt-6">
-            <p className="text-gray-600 mb-2">
-              Producto seleccionado: <strong>{selectedProduct.nombre_del_producto}</strong>
-            </p>
-            <button
-              onClick={handleCotizar}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              Cotizar
-            </button>
-          </div>
-        )}
       </main>
 
       {/* Modal de Opcionales */}
       {showModal && productoSeleccionado && (
-        <div className="fixed inset-0 z-10 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="relative bg-white rounded-lg shadow-lg max-w-3xl w-full mx-4">
-            <button
-              onClick={handleCloseModal}
-              className="absolute top-3 right-3 text-gray-500 hover:text-gray-700"
-            >
-              <X className="w-6 h-6" />
-            </button>
-
-            <div className="px-6 py-4 border-b">
-              <h2 className="text-xl font-bold">
-                Opcionales de {productoSeleccionado.nombre_del_producto}
+        <div className="fixed inset-0 z-10 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm animate-fadeIn">
+          <div className="relative bg-white rounded-xl shadow-xl max-w-5xl w-full mx-4 h-[85vh] animate-scaleIn overflow-hidden border border-gray-200">
+            <div className="flex justify-between items-center px-6 py-4 border-b bg-gradient-to-r from-blue-50 to-white">
+              <h2 className="text-xl font-bold flex items-center gap-2 text-blue-700">
+                <PlusCircle className="h-5 w-5 text-blue-600" />
+                Opcionales: {productoSeleccionado.nombre_del_producto
+                  .replace(/^Opcional: |^Opcional |Opcional de |Opcional: de /, '')
+                  .replace(/^Chipeadora Chipeadora/, 'Chipeadora')}
               </h2>
+              <button
+                onClick={handleCloseModal}
+                className="text-gray-500 hover:text-gray-700 bg-white rounded-full p-1 hover:bg-gray-100 transition-all duration-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <div className="p-6">
+            <div className="p-6 overflow-auto h-[calc(85vh-80px)] bg-gray-50">
               {currentOpcionales && currentOpcionales.length > 0 ? (
                 <>
-                  <table className="w-full text-sm border">
-                    <thead className="bg-gray-100 font-semibold text-gray-600">
+                  <table className="w-full text-sm border bg-white rounded-lg overflow-hidden shadow-sm">
+                    <thead className="bg-gradient-to-r from-gray-100 to-blue-50 font-semibold text-gray-700 sticky top-0 z-10">
                       <tr>
-                        <th className="p-2 border">Código</th>
-                        <th className="p-2 border">Nombre</th>
-                        <th className="p-2 border">Descripción</th>
-                        <th className="p-2 border">Modelo</th>
+                        <th className="px-4 py-3 border-b">Código</th>
+                        <th className="px-4 py-3 border-b">Nombre</th>
+                        <th className="px-4 py-3 border-b">Descripción</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {currentOpcionales.map((op) => (
-                        <tr key={op.codigo_producto}>
-                          <td className="p-2 border">{op.codigo_producto}</td>
-                          <td className="p-2 border">{op.nombre_del_producto}</td>
-                          <td className="p-2 border">{op.Descripcion}</td>
-                          <td className="p-2 border">{op.Modelo}</td>
+                      {currentOpcionales.map((op, index) => (
+                        <tr key={op.codigo_producto} className={`hover:bg-blue-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                          <td className="px-4 py-3 border-b border-gray-100 font-mono bg-blue-50 text-blue-700 font-medium border-l-2 border-blue-200 tracking-wider">{op.codigo_producto}</td>
+                          <td className="px-4 py-3 border-b border-gray-100 font-medium">{op.nombre_del_producto
+                            .replace(/^Opcional: |^Opcional |Opcional de |Opcional: de /, '')
+                            .replace(/^Chipeadora Chipeadora/, 'Chipeadora')}
+                          </td>
+                          <td className="px-4 py-3 border-b border-gray-100 text-gray-700">{op.Descripcion}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
 
                   {/* Paginación Opcionales */}
-                  <div className="flex justify-center items-center mt-4 space-x-4">
+                  <div className="flex justify-center items-center mt-6 space-x-4">
                     <button
-                      className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
+                      className="px-4 py-2 bg-white border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-50 transition-colors flex items-center gap-1 shadow-sm"
                       onClick={() => setOpcionalesPage((prev) => Math.max(prev - 1, 1))}
                       disabled={opcionalesPage === 1}
                     >
-                      ←
+                      <span>←</span> Anterior
                     </button>
-                    <span className="text-gray-700 font-semibold">
+                    <span className="text-gray-700 font-medium bg-white px-4 py-2 rounded-md border border-gray-200 shadow-sm">
                       {opcionalesPage} de {Math.ceil((opcionalesData?.length || 0) / opcionalesPerPage)}
                     </span>
                     <button
-                      className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
+                      className="px-4 py-2 bg-white border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-50 transition-colors flex items-center gap-1 shadow-sm"
                       onClick={() =>
                         setOpcionalesPage((prev) =>
                           Math.min(prev + 1, Math.ceil((opcionalesData?.length || 0) / opcionalesPerPage))
@@ -425,13 +732,145 @@ export default function App() {
                       }
                       disabled={opcionalesPage === Math.ceil((opcionalesData?.length || 0) / opcionalesPerPage)}
                     >
-                      →
+                      Siguiente <span>→</span>
                     </button>
                   </div>
                 </>
               ) : (
-                <p className="text-gray-500">No hay opcionales para mostrar.</p>
+                <div className="flex flex-col items-center justify-center py-16 bg-white rounded-xl shadow-sm">
+                  <div className="text-gray-400 mb-4 bg-gray-100 p-4 rounded-full">
+                    <X className="h-12 w-12" />
+                  </div>
+                  <p className="text-gray-600 text-lg font-medium">No hay opcionales disponibles</p>
+                  <p className="text-gray-500 mt-2">Este producto no tiene opcionales configurados</p>
+                </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Cotización */}
+      {showCotizarModal && productoSeleccionado && (
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm animate-fadeIn">
+          <div className="relative bg-white rounded-xl shadow-xl w-11/12 max-w-6xl h-[90vh] animate-scaleIn overflow-hidden border border-gray-200">
+            <div className="flex justify-between items-center px-6 py-4 border-b bg-gradient-to-r from-blue-50 to-white">
+              <h2 className="text-xl font-bold flex items-center gap-2 text-blue-700">
+                <Calculator className="h-5 w-5 text-blue-600" />
+                Cotización: {productoSeleccionado.nombre_del_producto
+                  .replace(/^Opcional: |^Opcional |Opcional de |Opcional: de /, '')
+                  .replace(/^Chipeadora Chipeadora/, 'Chipeadora')}
+              </h2>
+              <button
+                onClick={handleCloseCotizarModal}
+                className="text-gray-500 hover:text-gray-700 bg-white rounded-full p-1 hover:bg-gray-100 transition-all duration-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 bg-gray-50 h-[calc(90vh-140px)] overflow-auto">
+              {currentOpcionales && currentOpcionales.length > 0 ? (
+                <table className="min-w-full text-sm border bg-white rounded-lg overflow-hidden shadow-sm">
+                  <thead className="bg-gradient-to-r from-gray-100 to-blue-50 font-semibold text-gray-700 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-4 py-3 border-b text-center" style={{ width: "80px" }}>Seleccionar</th>
+                      <th className="px-4 py-3 border-b" style={{ width: "120px" }}>Código</th>
+                      <th className="px-4 py-3 border-b">Nombre</th>
+                      <th className="px-4 py-3 border-b">Descripción</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentOpcionales.map((item, index) => (
+                      <tr key={item.codigo_producto} 
+                        className={`hover:bg-blue-50 transition-colors ${
+                          selectedOpcionales.some(op => op.codigo_producto === item.codigo_producto) 
+                            ? 'bg-blue-50' 
+                            : index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                        }`}
+                      >
+                        <td className="p-3 border-b border-gray-100 text-center">
+                          <label className="cursor-pointer relative inline-flex items-center justify-center">
+                            <input
+                              type="checkbox"
+                              className="sr-only peer"
+                              checked={selectedOpcionales.some(op => op.codigo_producto === item.codigo_producto)}
+                              onChange={() => handleCheckboxChange(item)}
+                            />
+                            <div className="w-5 h-5 border border-gray-300 rounded-md bg-white peer-checked:bg-blue-600 peer-checked:border-blue-600 flex items-center justify-center transition-all duration-200 peer-hover:border-blue-400">
+                              {selectedOpcionales.some(op => op.codigo_producto === item.codigo_producto) && (
+                                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </div>
+                          </label>
+                        </td>
+                        <td className="px-4 py-3 border-b border-gray-100 font-mono bg-blue-50 text-blue-700 font-medium border-l-2 border-blue-200 tracking-wider">{item.codigo_producto}</td>
+                        <td className="px-4 py-3 border-b border-gray-100 font-medium">{item.nombre_del_producto
+                          .replace(/^Opcional: |^Opcional |Opcional de |Opcional: de /, '')
+                          .replace(/^Chipeadora Chipeadora/, 'Chipeadora')}
+                        </td>
+                        <td className="px-4 py-3 border-b border-gray-100 text-gray-700">{item.Descripcion}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 bg-white rounded-xl shadow-sm">
+                  <div className="text-gray-400 mb-4 bg-gray-100 p-4 rounded-full">
+                    <X className="h-12 w-12" />
+                  </div>
+                  <p className="text-gray-600 text-lg font-medium">No hay opcionales disponibles para cotizar</p>
+                  <p className="text-gray-500 mt-2">Este producto no tiene opcionales configurados</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer con contador y paginación */}
+            <div className="px-6 py-4 border-t bg-white">
+              <div className="flex flex-wrap justify-between items-center gap-4">
+                {/* Conteo de seleccionados */}
+                <div className="flex items-center gap-2">
+                  <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                    {selectedOpcionales.length} seleccionados
+                  </span>
+                  <span className="text-sm text-gray-600">
+                    de {opcionalesData?.length} opcionales
+                  </span>
+                </div>
+
+                {/* Paginación */}
+                <div className="flex items-center gap-3">
+                  <button
+                    className="px-3 py-1.5 bg-white border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-50 transition-colors flex items-center gap-1 text-sm shadow-sm"
+                    onClick={() => setOpcionalesPage((prev) => Math.max(prev - 1, 1))}
+                    disabled={opcionalesPage === 1}
+                  >
+                    <span>←</span> Anterior
+                  </button>
+                  <span className="text-gray-700 font-medium bg-white px-3 py-1.5 rounded-md border border-gray-200 text-sm shadow-sm">
+                    {opcionalesPage} de {totalOpcionalesPages}
+                  </span>
+                  <button
+                    className="px-3 py-1.5 bg-white border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-50 transition-colors flex items-center gap-1 text-sm shadow-sm"
+                    onClick={() => setOpcionalesPage((prev) => Math.min(prev + 1, totalOpcionalesPages))}
+                    disabled={opcionalesPage === totalOpcionalesPages}
+                  >
+                    Siguiente <span>→</span>
+                  </button>
+                </div>
+
+                {/* Botón "Calcular" */}
+                <button
+                  className={`px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-md ${currentOpcionales?.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  onClick={handleCalcular}
+                  disabled={currentOpcionales?.length === 0}
+                >
+                  <Calculator className="h-4 w-4" />
+                  Crear cotización
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -439,43 +878,69 @@ export default function App() {
 
       {/* Modal "Ver Detalle" (JSON aplanado) */}
       {showJsonModal && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="relative bg-white rounded-lg shadow-lg w-10/12 max-w-4xl p-6">
-            <button
-              onClick={() => setShowJsonModal(false)}
-              className="absolute top-3 right-3 text-gray-500 hover:text-gray-700"
-            >
-              <X className="w-6 h-6" />
-            </button>
-            <h2 className="text-xl font-bold mb-4">Detalle en forma de Tabla</h2>
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm animate-fadeIn">
+          <div className="relative bg-white rounded-xl shadow-xl w-11/12 max-w-5xl h-[85vh] animate-scaleIn overflow-hidden border border-gray-200">
+            <div className="flex justify-between items-center px-6 py-4 border-b bg-gradient-to-r from-blue-50 to-white">
+              <h2 className="text-xl font-bold flex items-center gap-2 text-blue-700">
+                <Info className="h-5 w-5 text-blue-600" />
+                Especificaciones Técnicas
+              </h2>
+              <button
+                onClick={() => setShowJsonModal(false)}
+                className="text-gray-500 hover:text-gray-700 bg-white rounded-full p-1 hover:bg-gray-100 transition-all duration-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-            <table className="w-full text-sm border">
-              <thead className="bg-gray-100 font-semibold text-gray-600">
-                <tr>
-                  <th className="p-2 border">Título</th>
-                  <th className="p-2 border">Valor</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.keys(flattenedData).length > 0 ? (
-                  Object.entries(flattenedData).map(([key, value], index) => (
-                    <tr key={index}>
-                      <td className="p-2 border">{key}</td>
-                      <td className="p-2 border">{String(value)}</td>
+            <div className="p-6 overflow-auto h-[calc(85vh-80px)] bg-gray-50">
+              {Object.keys(flattenedData).length > 0 ? (
+                <table className="w-full text-sm border bg-white rounded-lg overflow-hidden shadow-sm">
+                  <thead className="bg-gradient-to-r from-gray-100 to-blue-50 font-semibold text-gray-700 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-4 py-3 border-b text-left" style={{ width: "35%" }}>Característica</th>
+                      <th className="px-4 py-3 border-b text-left">Especificación</th>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td className="p-2 border" colSpan={2}>
-                      No hay datos
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody>
+                    {Object.entries(flattenedData).map(([key, value], index) => (
+                      <tr key={index} className={`hover:bg-blue-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                        <td className="px-4 py-3 border-b border-gray-100 font-medium text-gray-800">{key}</td>
+                        <td className="px-4 py-3 border-b border-gray-100 text-gray-700">{String(value)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 bg-white rounded-xl shadow-sm">
+                  <div className="text-gray-400 mb-4 bg-gray-100 p-4 rounded-full">
+                    <X className="h-12 w-12" />
+                  </div>
+                  <p className="text-gray-600 text-lg font-medium">No hay especificaciones disponibles</p>
+                  <p className="text-gray-500 mt-2">Este producto no tiene detalles técnicos configurados</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes scaleIn {
+          from { transform: scale(0.95); opacity: 0; }
+          to { transform: scale(1); opacity: 1; }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.25s ease-out;
+        }
+        .animate-scaleIn {
+          animation: scaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+      `}</style>
     </div>
   );
 }
