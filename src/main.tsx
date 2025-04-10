@@ -7,6 +7,7 @@ import App from "./App";
 import Calculo from "./Calculo";
 import Dashboard from "./Dashboard";
 import Configuracion from "./Configuracion";
+import Cotizacion from "./Cotizacion";
 
 import "./index.css";
 
@@ -17,6 +18,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <Route path="/equipos" element={<App />} />
       <Route path="/calculo" element={<Calculo />} />
       <Route path="/configuracion" element={<Configuracion />} />
+      <Route path="/cotizacion" element={<Cotizacion />} />
     </Routes>
   </BrowserRouter>
 );

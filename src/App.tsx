@@ -305,7 +305,7 @@ export default function App() {
 
   const handleCalcular = () => {
     if (!productoSeleccionado) return;
-    navigate('/calculo', {
+    navigate('/cotizacion', {
       state: {
         productoPrincipal: productoSeleccionado,
         opcionalesSeleccionados: selectedOpcionales,
@@ -347,7 +347,7 @@ export default function App() {
             EQUIPOS
           </Link>
         </nav>
-        
+
         {/* Botón de configuración en la parte inferior */}
         <div className="pt-2 border-t mt-auto">
           <Link
@@ -771,51 +771,55 @@ export default function App() {
 
             <div className="p-6 bg-gray-50 h-[calc(90vh-140px)] overflow-auto">
               {currentOpcionales && currentOpcionales.length > 0 ? (
-                <table className="min-w-full text-sm border bg-white rounded-lg overflow-hidden shadow-sm">
-                  <thead className="bg-gradient-to-r from-gray-100 to-blue-50 font-semibold text-gray-700 sticky top-0 z-10">
-                    <tr>
-                      <th className="px-4 py-3 border-b text-center" style={{ width: "80px" }}>Seleccionar</th>
-                      <th className="px-4 py-3 border-b" style={{ width: "120px" }}>Código</th>
-                      <th className="px-4 py-3 border-b">Nombre</th>
-                      <th className="px-4 py-3 border-b">Descripción</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {currentOpcionales.map((item, index) => (
-                      <tr key={item.codigo_producto} 
-                        className={`hover:bg-blue-50 transition-colors ${
-                          selectedOpcionales.some(op => op.codigo_producto === item.codigo_producto) 
-                            ? 'bg-blue-50' 
-                            : index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                        }`}
-                      >
-                        <td className="p-3 border-b border-gray-100 text-center">
-                          <label className="cursor-pointer relative inline-flex items-center justify-center">
-                            <input
-                              type="checkbox"
-                              className="sr-only peer"
-                              checked={selectedOpcionales.some(op => op.codigo_producto === item.codigo_producto)}
-                              onChange={() => handleCheckboxChange(item)}
-                            />
-                            <div className="w-5 h-5 border border-gray-300 rounded-md bg-white peer-checked:bg-blue-600 peer-checked:border-blue-600 flex items-center justify-center transition-all duration-200 peer-hover:border-blue-400">
-                              {selectedOpcionales.some(op => op.codigo_producto === item.codigo_producto) && (
-                                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                              )}
-                            </div>
-                          </label>
-                        </td>
-                        <td className="px-4 py-3 border-b border-gray-100 font-mono bg-blue-50 text-blue-700 font-medium border-l-2 border-blue-200 tracking-wider">{item.codigo_producto}</td>
-                        <td className="px-4 py-3 border-b border-gray-100 font-medium">{item.nombre_del_producto
-                          .replace(/^Opcional: |^Opcional |Opcional de |Opcional: de /, '')
-                          .replace(/^Chipeadora Chipeadora/, 'Chipeadora')}
-                        </td>
-                        <td className="px-4 py-3 border-b border-gray-100 text-gray-700">{item.Descripcion}</td>
+                <div className="overflow-x-auto border rounded-lg shadow-sm bg-white">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gradient-to-r from-gray-100 to-blue-50 font-semibold text-gray-700 sticky top-0 z-10">
+                      <tr>
+                        <th className="px-4 py-3 border-b text-center w-[80px] min-w-[70px] sticky left-0 z-20 bg-gradient-to-r from-gray-100 to-blue-50">Seleccionar</th>
+                        <th className="px-4 py-3 border-b min-w-[120px] w-[120px]">Código</th>
+                        <th className="px-4 py-3 border-b min-w-[250px]">Nombre</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {currentOpcionales.map((item, index) => (
+                        <tr key={item.codigo_producto} 
+                          className={`hover:bg-blue-50 transition-colors ${
+                            selectedOpcionales.some(op => op.codigo_producto === item.codigo_producto) 
+                              ? 'bg-blue-50' 
+                              : index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                          }`}
+                        >
+                          <td className="p-3 border-b border-gray-100 text-center sticky left-0 z-10"
+                            style={{background: selectedOpcionales.some(op => op.codigo_producto === item.codigo_producto) 
+                              ? '#EBF5FF' /* bg-blue-50 */ 
+                              : index % 2 === 0 ? 'white' : '#F9FAFB' /* bg-gray-50 */}}
+                          >
+                            <label className="cursor-pointer relative inline-flex items-center justify-center">
+                              <input
+                                type="checkbox"
+                                className="sr-only peer"
+                                checked={selectedOpcionales.some(op => op.codigo_producto === item.codigo_producto)}
+                                onChange={() => handleCheckboxChange(item)}
+                              />
+                              <div className="w-5 h-5 border border-gray-300 rounded-md bg-white peer-checked:bg-blue-600 peer-checked:border-blue-600 flex items-center justify-center transition-all duration-200 peer-hover:border-blue-400">
+                                {selectedOpcionales.some(op => op.codigo_producto === item.codigo_producto) && (
+                                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                              </div>
+                            </label>
+                          </td>
+                          <td className="px-4 py-3 border-b border-gray-100 font-mono bg-blue-50 text-blue-700 font-medium border-l-2 border-blue-200 tracking-wider">{item.codigo_producto}</td>
+                          <td className="px-4 py-3 border-b border-gray-100 font-medium">{item.nombre_del_producto
+                            .replace(/^Opcional: |^Opcional |Opcional de |Opcional: de /, '')
+                            .replace(/^Chipeadora Chipeadora/, 'Chipeadora')}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-16 bg-white rounded-xl shadow-sm">
                   <div className="text-gray-400 mb-4 bg-gray-100 p-4 rounded-full">
@@ -828,7 +832,7 @@ export default function App() {
             </div>
 
             {/* Footer con contador y paginación */}
-            <div className="px-6 py-4 border-t bg-white">
+            <div className="px-6 py-4 border-t bg-white sticky bottom-0 shadow-md z-20">
               <div className="flex flex-wrap justify-between items-center gap-4">
                 {/* Conteo de seleccionados */}
                 <div className="flex items-center gap-2">
@@ -861,14 +865,14 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Botón "Calcular" */}
+                {/* Botón "Crear cotización" */}
                 <button
-                  className={`px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-md ${currentOpcionales?.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-md ${selectedOpcionales.length === 0 ? 'opacity-70 cursor-not-allowed' : ''}`}
                   onClick={handleCalcular}
-                  disabled={currentOpcionales?.length === 0}
+                  disabled={selectedOpcionales.length === 0}
                 >
                   <Calculator className="h-4 w-4" />
-                  Crear cotización
+                  Crear cotización {selectedOpcionales.length > 0 && `(${selectedOpcionales.length})`}
                 </button>
               </div>
             </div>
