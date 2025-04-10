@@ -50,6 +50,18 @@ const DetallesEnvio: React.FC<DetallesEnvioProps> = ({
     }));
   };
 
+  const enviarDatosProductos = async (productos: { codigo: string, tipo: string, precioEur: number }[]) => {
+    try {
+      const queryString = productos.map(p => `codigo=${p.codigo}&tipo=${p.tipo}&precioEur=${p.precioEur}`).join('&');
+      const url = `https://n8n-807184488368.southamerica-west1.run.app/webhook/ceec46e2-1fa3-4f9b-94bb-a974bc439bf6?${queryString}`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Error ${response.status}`);
+      console.log('Datos enviados exitosamente al webhook:', url);
+    } catch (err) {
+      console.error('Error al enviar datos al webhook:', err);
+    }
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-md overflow-hidden max-w-6xl w-full mx-auto">
       {/* Encabezado */}
@@ -159,7 +171,20 @@ const DetallesEnvio: React.FC<DetallesEnvioProps> = ({
             Volver
           </button>
           <button
-            onClick={onSiguiente}
+            onClick={async () => {
+              try {
+                await enviarDatosProductos([
+                  { codigo: '61502', tipo: 'principal', precioEur: 30770 },
+                  { codigo: '61512', tipo: 'opcional', precioEur: 765 },
+                  { codigo: '61507', tipo: 'opcional', precioEur: 2850 },
+                  { codigo: '61578', tipo: 'opcional', precioEur: 800 },
+                ]);
+                alert('Datos enviados exitosamente');
+                onSiguiente();
+              } catch (error) {
+                alert('Error al enviar los datos');
+              }
+            }}
             className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
           >
             Siguiente

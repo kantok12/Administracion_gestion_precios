@@ -84,30 +84,31 @@ export default function Dashboard() {
 
   // ----------- Webhooks -----------
   const WEBHOOK_URL_DOLAR =
-    'https://n8n-807184488368.southamerica-west1.run.app/webhook/6f697684-4cfc-4bc1-8918-bfffc9f20b9f';
+    'https://n8n-807184488368.southamerica-west1.run.app/webhook/8012d60e-8a29-4910-b385-6514edc3d912';
+
+  const [dollarValue, setDollarValue] = useState(null);
+  const [euroValue, setEuroValue] = useState(null);
 
   // ========== 1) Carga inicial de datos ==========
   const obtenerDatosDolar = async () => {
     try {
       setRefreshing(true);
-      // En un caso real, aquí se haría la llamada a la API
-      // const res = await fetch(WEBHOOK_URL_DOLAR);
-      // if (!res.ok) throw new Error(`Error ${res.status}`);
-      // const data = await res.json();
-      // setDolarActual(data);
-      
-      // Simulación de retardo para mostrar la animación
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Por ahora, simulamos datos
-      setDolarActual({
-        fecha: new Date().toLocaleDateString(),
-        valor: 850.25 + Math.random() * 10,
-        variacion: 2.5 + Math.random() * 2,
-      });
+      const response = await fetch('https://n8n-807184488368.southamerica-west1.run.app/webhook/8012d60e-8a29-4910-b385-6514edc3d912');
+      if (!response.ok) throw new Error(`Error ${response.status}`);
+      const data = await response.json();
+      console.log('Datos recibidos del webhook:', data);
+      if (Array.isArray(data) && data.length > 0) {
+        setDolarActual({
+          fecha: data[0].Fecha,
+          valor: parseFloat(data[0].Valor_Dolar),
+          variacion: 0, // Puedes calcular la variación si es necesario
+        });
+        setDollarValue(data[0].Valor_Dolar);
+        setEuroValue(data[0].Valor_Euro);
+      }
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || 'Error al actualizar datos');
+      setError(err.message || 'Error al actualizar datos');
     } finally {
       setRefreshing(false);
       setLoading(false);
@@ -212,11 +213,33 @@ export default function Dashboard() {
             ) : (
               <>
                 <div className="flex items-end gap-4">
-                  <div className="text-4xl font-bold">${dolarActual.valor.toFixed(2)}</div>
+                  <div className="text-4xl font-bold">${dollarValue || dolarActual.valor.toFixed(2)}</div>
                   <div className={`flex items-center ${dolarActual.variacion >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                     {dolarActual.variacion >= 0 ? <ArrowUpRight className="h-5 w-5" /> : <ArrowDownRight className="h-5 w-5" />}
                     <span className="font-semibold">{Math.abs(dolarActual.variacion).toFixed(2)}%</span>
                   </div>
+                </div>
+                <div className="text-sm text-gray-500 mt-2">Impacto en precios de chipeadoras</div>
+              </>
+            )}
+          </div>
+
+          {/* Tarjeta de Euro */}
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Valor del Euro</h3>
+              <DollarIcon className="h-5 w-5 text-gray-400" />
+            </div>
+            
+            {loading ? (
+              <div className="animate-pulse flex flex-col space-y-3">
+                <div className="h-8 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-28"></div>
+                <div className="h-4 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-40"></div>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-end gap-4">
+                  <div className="text-4xl font-bold">${euroValue || 'Cargando...'}</div>
                 </div>
                 <div className="text-sm text-gray-500 mt-2">Impacto en precios de chipeadoras</div>
               </>
