@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import LogoEcoAlliance from './components/LogoEcoAlliance';
+import ReactMarkdown from 'react-markdown';
 
 // Interfaces
 interface Producto {
@@ -800,7 +801,7 @@ export default function App() {
                       : 'bg-gray-100 rounded-tl-none'
                   }`}
                 >
-                  {msg.text}
+                  <ReactMarkdown>{msg.text}</ReactMarkdown>
                 </div>
               ))}
             </div>
