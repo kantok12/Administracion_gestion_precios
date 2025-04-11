@@ -62,8 +62,8 @@ export default function App() {
   const [opcionalesPage, setOpcionalesPage] = useState(1);
   const opcionalesPerPage = 10;
 
-  // Estados para cotización
-  const [showCotizarModal, setShowCotizarModal] = useState(false);
+  // Estados para settings
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [selectedOpcionales, setSelectedOpcionales] = useState<Opcional[]>([]);
 
   // ----------- Modal para "Ver Detalle" con JSON aplanado -----------
@@ -73,7 +73,7 @@ export default function App() {
   // Estados de carga para acciones específicas
   const [loadingDetail, setLoadingDetail] = useState<string | null>(null);
   const [loadingOpcionales, setLoadingOpcionales] = useState<string | null>(null);
-  const [loadingCotizar, setLoadingCotizar] = useState<string | null>(null);
+  const [loadingSettings, setLoadingSettings] = useState<string | null>(null);
 
   // ----------- Webhooks -----------
   const WEBHOOK_URL_PRINCIPAL =
@@ -84,6 +84,10 @@ export default function App() {
 
   const WEBHOOK_URL_VER_DETALLE =
     'https://n8n-807184488368.southamerica-west1.run.app/webhook/c02247e7-84f0-49b3-a2df-28817da48017';
+
+  // URL del webhook de settings
+  const WEBHOOK_URL_SETTINGS =
+    'https://n8n-807184488368.southamerica-west1.run.app/webhook/d9f32e08-c5d2-4a77-b3de-ba817e8fca3e';
 
   // Chat state
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -107,7 +111,7 @@ export default function App() {
     }
   };
   
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (chatMessage.trim() === '') return;
     
     // Add user message to chat
@@ -138,38 +142,30 @@ export default function App() {
     
     console.log('Enviando al webhook (GET):', url);
     
-    fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`Error del servidor: ${response.status} - ${response.statusText}`);
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
         }
-        return response.json();
-      })
-      .then(data => {
-        console.log('Respuesta del servidor:', data); // Para depuración
-        if (data && Array.isArray(data) && data.length > 0 && data[0].output) {
-          // Si la respuesta viene en formato [{ output: "respuesta" }]
-          setChatHistory(prev => [...prev, { type: 'support', text: data[0].output }]);
-        } else {
-          console.error('Respuesta del servidor sin formato esperado:', data);
-          setChatHistory(prev => [...prev, { 
-            type: 'support', 
-            text: `Error: La respuesta del servidor no tiene el formato esperado. Datos recibidos: ${JSON.stringify(data)}` 
-          }]);
-        }
-      })
-      .catch(error => {
-        console.error('Error detallado:', error);
-        setChatHistory(prev => [...prev, { 
-          type: 'support', 
-          text: `Error de conexión: ${error.message}. Por favor, verifica la conexión e intenta nuevamente.` 
-        }]);
       });
+      if (!response.ok) {
+        throw new Error(`Error del servidor: ${response.status} - ${response.statusText}`);
+      }
+      const data = await response.json();
+      console.log('Respuesta del servidor:', data); // Para depuración
+      if (data && Array.isArray(data) && data.length > 0 && data[0].output) {
+        setChatHistory(prev => [...prev, { type: 'support', text: data[0].output }]);
+      } else {
+        throw new Error('La respuesta del servidor no tiene el formato esperado.');
+      }
+    } catch (error: any) {
+      console.error('Error detallado:', error);
+      setChatHistory(prev => [...prev, { 
+        type: 'support', 
+        text: `Error de conexión: ${error.message || 'Error desconocido'}. Por favor, verifica la conexión e intenta nuevamente.` 
+      }]);
+    }
     
     setChatMessage('');
   };
@@ -219,12 +215,12 @@ export default function App() {
       if (e.key === 'Escape') {
         if (showModal) handleCloseModal();
         if (showJsonModal) setShowJsonModal(false);
-        if (showCotizarModal) handleCloseCotizarModal();
+        if (showSettingsModal) handleCloseSettingsModal();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showModal, showJsonModal, showCotizarModal]);
+  }, [showModal, showJsonModal, showSettingsModal]);
 
   // ========== 3) Función recursiva para aplanar objetos ==========
   const flattenObject = (obj: any): Record<string, any> => {
@@ -357,9 +353,9 @@ export default function App() {
     setOpcionalesData(null);
   };
 
-  // ========== 7) Funciones de Cotización ==========
-  const handleCotizar = async (producto: Producto) => {
-    setLoadingCotizar(producto.codigo_producto);
+  // ========== 7) Funciones de Settings ==========
+  const handleSettings = async (producto: Producto) => {
+    setLoadingSettings(producto.codigo_producto);
     setProductoSeleccionado(producto);
     setOpcionalesPage(1);
     setSelectedOpcionales([]);
@@ -375,17 +371,17 @@ export default function App() {
       if (!resp.ok) throw new Error(`Error al obtener opcionales: ${resp.status}`);
       const data: Opcional[] = await resp.json();
       setOpcionalesData(data);
-      setShowCotizarModal(true);
+      setShowSettingsModal(true);
     } catch (err) {
       console.error('Error cargando opcionales:', err);
       setOpcionalesData(null);
     } finally {
-      setLoadingCotizar(null);
+      setLoadingSettings(null);
     }
   };
 
-  const handleCloseCotizarModal = () => {
-    setShowCotizarModal(false);
+  const handleCloseSettingsModal = () => {
+    setShowSettingsModal(false);
     setProductoSeleccionado(null);
     setOpcionalesData(null);
     setSelectedOpcionales([]);
@@ -402,14 +398,73 @@ export default function App() {
     });
   };
 
-  const handleCalcular = () => {
+  const handleCalcular = async () => {
     if (!productoSeleccionado) return;
-    navigate('/cotizacion', {
-      state: {
-        productoPrincipal: productoSeleccionado,
-        opcionalesSeleccionados: selectedOpcionales,
-      },
-    });
+    
+    // Almacenar temporalmente para debug
+    const productoPrincipal = productoSeleccionado;
+    const opcionalesSeleccionados = selectedOpcionales;
+    
+    try {
+      // Configuración de datos
+      const codigoPrincipal = productoSeleccionado.codigo_producto;
+      const opcionalesCodigos = selectedOpcionales.map(opcional => opcional.codigo_producto);
+      
+      // Intentar primero con un enfoque simplificado
+      const params = new URLSearchParams();
+      params.append('codigo', codigoPrincipal);
+      
+      // Agregar cada código opcional como un parámetro separado para evitar problemas de parseo
+      opcionalesCodigos.forEach((codigo, index) => {
+        params.append(`opcional_${index}`, codigo);
+      });
+      
+      const url = `${WEBHOOK_URL_SETTINGS}?${params.toString()}`;
+      console.log("Intentando cotización con URL:", url);
+      
+      // Usar fetch con modo "no-cors" para evitar restricciones CORS
+      // Nota: Esto hará que la respuesta sea "opaque" y no se podrá leer directamente
+      const response = await fetch(url, {
+        method: 'GET', 
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      });
+      
+      console.log("Respuesta recibida:", response);
+      
+      // Como estamos usando no-cors, no podemos verificar status o leer la respuesta
+      // Así que asumimos éxito y continuamos
+      
+      // Navegar a la página de cotización con los datos
+      navigate('/cotizacion', {
+        state: {
+          productoPrincipal: productoPrincipal,
+          opcionalesSeleccionados: opcionalesSeleccionados,
+        },
+      });
+      
+    } catch (error: any) {
+      console.error("Error detallado en cotización:", error);
+      
+      // Intentar navegar de todos modos si es posible
+      try {
+        // Plan B: Navegar a la cotización incluso con error
+        alert(`Advertencia: Se produjo un error al contactar al servidor, pero continuaremos con cotización. Detalle: ${error.message || 'Error desconocido'}`);
+        
+        navigate('/cotizacion', {
+          state: {
+            productoPrincipal: productoPrincipal,
+            opcionalesSeleccionados: opcionalesSeleccionados,
+          },
+        });
+      } catch (navError) {
+        console.error("Error fatal, no se puede continuar:", navError);
+        alert(`Error crítico: No se pudo crear cotización. Por favor, intente nuevamente más tarde.`);
+      }
+    }
   };
 
   // Paginación de Opcionales
@@ -447,7 +502,7 @@ export default function App() {
           </Link>
         </nav>
 
-        {/* Botón de configuración en la parte inferior */}
+        {/* Botón de configurar en la parte inferior */}
         <div className="pt-2 border-t mt-auto">
           <Link
             to="/configuracion"
@@ -555,7 +610,7 @@ export default function App() {
                   <th className="px-6 py-4">Categoría</th>
                   <th className="px-6 py-4 text-center">Ver Detalle</th>
                   <th className="px-6 py-4 text-center">Opcionales</th>
-                  <th className="px-6 py-4 text-center">Cotizar</th>
+                  <th className="px-6 py-4 text-center">Configurar</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -648,7 +703,7 @@ export default function App() {
                   <th className="px-6 py-4">Categoría</th>
                   <th className="px-6 py-4 text-center">Ver Detalle</th>
                   <th className="px-6 py-4 text-center">Opcionales</th>
-                  <th className="px-6 py-4 text-center">Cotizar</th>
+                  <th className="px-6 py-4 text-center">Configurar</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -718,22 +773,22 @@ export default function App() {
                       </div>
                     </td>
 
-                    {/* Botón "Cotizar" */}
+                    {/* Botón "Configurar" */}
                     <td className="px-6 py-3 text-center">
                       <div className="relative inline-block group">
                         <button
-                          onClick={() => handleCotizar(p)}
-                          className={`flex items-center justify-center ${loadingCotizar === p.codigo_producto ? 'opacity-70' : ''}`}
-                          disabled={loadingCotizar === p.codigo_producto}
+                          onClick={() => handleSettings(p)}
+                          className={`flex items-center justify-center ${loadingSettings === p.codigo_producto ? 'opacity-70' : ''}`}
+                          disabled={loadingSettings === p.codigo_producto}
                         >
-                          {loadingCotizar === p.codigo_producto ? (
+                          {loadingSettings === p.codigo_producto ? (
                             <Loader className="text-blue-600 animate-spin w-5 h-5" />
                           ) : (
                             <Calculator className="text-blue-600 hover:text-blue-800 w-5 h-5" />
                           )}
                         </button>
                         <div className="absolute z-10 w-40 p-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity -bottom-10 left-1/2 transform -translate-x-1/2 pointer-events-none">
-                          Crear cotización con opcionales
+                          Configurar con opcionales
                         </div>
                       </div>
                     </td>
@@ -911,18 +966,18 @@ export default function App() {
       )}
 
       {/* Modal de Cotización */}
-      {showCotizarModal && productoSeleccionado && (
+      {showSettingsModal && productoSeleccionado && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm animate-fadeIn">
           <div className="relative bg-white rounded-xl shadow-xl w-11/12 max-w-6xl h-[90vh] animate-scaleIn overflow-hidden border border-gray-200">
             <div className="flex justify-between items-center px-6 py-4 border-b bg-gradient-to-r from-blue-50 to-white">
               <h2 className="text-xl font-bold flex items-center gap-2 text-blue-700">
                 <Calculator className="h-5 w-5 text-blue-600" />
-                Cotización: {productoSeleccionado.nombre_del_producto
+                Configurar: {productoSeleccionado.nombre_del_producto
                   .replace(/^Opcional: |^Opcional |Opcional de |Opcional: de /, '')
                   .replace(/^Chipeadora Chipeadora/, 'Chipeadora')}
               </h2>
               <button
-                onClick={handleCloseCotizarModal}
+                onClick={handleCloseSettingsModal}
                 className="text-gray-500 hover:text-gray-700 bg-white rounded-full p-1 hover:bg-gray-100 transition-all duration-200"
               >
                 <X className="w-5 h-5" />
@@ -1025,14 +1080,14 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Botón "Crear cotización" */}
+                {/* Botón "Crear configurar" */}
                 <button
                   className={`px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-md ${selectedOpcionales.length === 0 ? 'opacity-70 cursor-not-allowed' : ''}`}
                   onClick={handleCalcular}
                   disabled={selectedOpcionales.length === 0}
                 >
                   <Calculator className="h-4 w-4" />
-                  Crear cotización {selectedOpcionales.length > 0 && `(${selectedOpcionales.length})`}
+                  Configurar {selectedOpcionales.length > 0 && `(${selectedOpcionales.length})`}
                 </button>
               </div>
             </div>

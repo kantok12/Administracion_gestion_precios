@@ -157,7 +157,7 @@ export default function Cotizacion() {
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <h1 className="text-lg font-semibold">Crear Cotización</h1>
+          <h1 className="text-lg font-semibold">Configurar</h1>
         </div>
       </header>
 

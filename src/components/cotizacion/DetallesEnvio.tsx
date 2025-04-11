@@ -52,13 +52,23 @@ const DetallesEnvio: React.FC<DetallesEnvioProps> = ({
 
   const enviarDatosProductos = async (productos: { codigo: string, tipo: string, precioEur: number }[]) => {
     try {
-      const queryString = productos.map(p => `codigo=${p.codigo}&tipo=${p.tipo}&precioEur=${p.precioEur}`).join('&');
-      const url = `https://n8n-807184488368.southamerica-west1.run.app/webhook/ceec46e2-1fa3-4f9b-94bb-a974bc439bf6?${queryString}`;
+      // Crear la cadena de consulta con los productos
+      const productoQuery = productos.map(p => `codigo=${p.codigo}&tipo=${p.tipo}&precioEur=${p.precioEur}`).join('&');
+      
+      // Agregar los puertos seleccionados y el descuento a la consulta
+      const puertoOrigenQuery = `puertoOrigen=${formData.puertoOrigen}`;
+      const puertoDestinoQuery = `puertoDestino=${formData.puertoDestino}`;
+      const descuentoQuery = `descuento=${formData.descuento}`;
+      
+      // Combinar todo en una sola URL
+      const url = `https://n8n-807184488368.southamerica-west1.run.app/webhook/ceec46e2-1fa3-4f9b-94bb-a974bc439bf6?${productoQuery}&${puertoOrigenQuery}&${puertoDestinoQuery}&${descuentoQuery}`;
+      
       const response = await fetch(url);
       if (!response.ok) throw new Error(`Error ${response.status}`);
       console.log('Datos enviados exitosamente al webhook:', url);
     } catch (err) {
       console.error('Error al enviar datos al webhook:', err);
+      throw err; // Re-lanzar el error para que pueda ser capturado por el botón
     }
   };
 
@@ -173,13 +183,24 @@ const DetallesEnvio: React.FC<DetallesEnvioProps> = ({
           <button
             onClick={async () => {
               try {
+                // Validar que los puertos estén seleccionados
+                if (!formData.puertoOrigen || !formData.puertoDestino) {
+                  alert('Por favor seleccione los puertos de origen y destino');
+                  return;
+                }
+                
                 await enviarDatosProductos([
                   { codigo: '61502', tipo: 'principal', precioEur: 30770 },
                   { codigo: '61512', tipo: 'opcional', precioEur: 765 },
                   { codigo: '61507', tipo: 'opcional', precioEur: 2850 },
                   { codigo: '61578', tipo: 'opcional', precioEur: 800 },
                 ]);
-                alert('Datos enviados exitosamente');
+                
+                // Obtener los nombres de puertos para mostrar mensaje más amigable
+                const origenNombre = puertosOrigen.find(p => p.id === formData.puertoOrigen)?.nombre || formData.puertoOrigen;
+                const destinoNombre = puertosDestino.find(p => p.id === formData.puertoDestino)?.nombre || formData.puertoDestino;
+                
+                alert(`Datos enviados exitosamente!\nPuerto origen: ${origenNombre}\nPuerto destino: ${destinoNombre}`);
                 onSiguiente();
               } catch (error) {
                 alert('Error al enviar los datos');
@@ -189,6 +210,50 @@ const DetallesEnvio: React.FC<DetallesEnvioProps> = ({
           >
             Siguiente
             <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Botón para pruebas explícitas */}
+        <div className="mt-4 border-t pt-4">
+          <h3 className="text-sm font-medium text-gray-700 mb-2">Herramientas de prueba</h3>
+          <button
+            onClick={async () => {
+              try {
+                // Datos de ejemplo para prueba
+                if (!formData.puertoOrigen || !formData.puertoDestino) {
+                  alert('Por favor seleccione los puertos de origen y destino para la prueba');
+                  return;
+                }
+
+                await enviarDatosProductos([
+                  { codigo: '61502', tipo: 'principal', precioEur: 30770 },
+                  { codigo: '61512', tipo: 'opcional', precioEur: 765 },
+                  { codigo: '61507', tipo: 'opcional', precioEur: 2850 },
+                  { codigo: '61578', tipo: 'opcional', precioEur: 800 },
+                ]);
+
+                console.log('Prueba enviada con éxito');
+                console.log('Datos enviados:', {
+                  productos: [
+                    { codigo: '61502', tipo: 'principal', precioEur: 30770 },
+                    { codigo: '61512', tipo: 'opcional', precioEur: 765 },
+                    { codigo: '61507', tipo: 'opcional', precioEur: 2850 },
+                    { codigo: '61578', tipo: 'opcional', precioEur: 800 },
+                  ],
+                  puertoOrigen: formData.puertoOrigen,
+                  puertoDestino: formData.puertoDestino,
+                  descuento: formData.descuento
+                });
+                
+                alert('Prueba ejecutada con éxito. Revisa la consola para más detalles.');
+              } catch (error) {
+                console.error('Error en la prueba:', error);
+                alert('Error al ejecutar la prueba. Revisa la consola para más detalles.');
+              }
+            }}
+            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+          >
+            Ejecutar Prueba de Webhook
           </button>
         </div>
       </div>
