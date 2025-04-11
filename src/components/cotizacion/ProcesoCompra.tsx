@@ -136,6 +136,8 @@ const ProcesoCompra: React.FC<ProcesoCompraProps> = ({
           <DetallesTributarios
             onVolver={handlePrevStep}
             onSiguiente={handleNextStep}
+            productoPrincipal={productoPrincipal}
+            opcionalesSeleccionados={opcionales}
           />
         )}
         

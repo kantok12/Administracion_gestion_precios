@@ -154,6 +154,13 @@ export default function Dashboard() {
             <BarChart2 className="h-4 w-4" />
             EQUIPOS
           </Link>
+          <Link
+            to="/admin"
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-gray-50"
+          >
+            <Settings className="h-4 w-4" />
+            ADMIN
+          </Link>
         </nav>
         
         {/* Botón de configuración en la parte inferior */}

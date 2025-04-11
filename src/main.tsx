@@ -8,6 +8,7 @@ import Calculo from "./Calculo";
 import Dashboard from "./Dashboard";
 import Configuracion from "./Configuracion";
 import Cotizacion from "./Cotizacion";
+import AdminPanel from "./components/admin/AdminPanel";
 
 import "./index.css";
 
@@ -20,6 +21,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <Route path="/configuracion" element={<Configuracion />} />
       <Route path="/settings" element={<Cotizacion />} />
       <Route path="/cotizacion" element={<Cotizacion />} />
+      <Route path="/admin" element={<AdminPanel />} />
     </Routes>
   </BrowserRouter>
 );

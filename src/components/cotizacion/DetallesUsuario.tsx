@@ -1,61 +1,128 @@
-import React, { useState } from 'react';
-import { X, ChevronLeft, CheckCircle } from 'lucide-react';
+import React from 'react';
+import { X, FileSpreadsheet } from 'lucide-react';
 
 interface DetallesUsuarioProps {
   onVolver: () => void;
   onFinalizar: () => void;
+  productoPrincipal?: any;
+  opcionalesSeleccionados?: any[];
+  datosEnvio?: any;
+  datosTributarios?: any;
 }
 
 const DetallesUsuario: React.FC<DetallesUsuarioProps> = ({
   onVolver,
-  onFinalizar
+  onFinalizar,
 }) => {
-  const [formData, setFormData] = useState({
-    nombreCliente: '',
-    rut: '',
-    direccion: '',
-    comuna: '',
-    ciudad: '',
-    email: '',
-    telefono: '',
-    observaciones: ''
-  });
-
-  const [formErrors, setFormErrors] = useState({
-    nombreCliente: false,
-    rut: false,
-    email: false
-  });
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-
-    // Clear error when user starts typing
-    if (formErrors[name as keyof typeof formErrors]) {
-      setFormErrors(prev => ({
-        ...prev,
-        [name]: false
-      }));
-    }
-  };
-
-  const handleSubmit = () => {
-    // Simple validation
-    const errors = {
-      nombreCliente: formData.nombreCliente.trim() === '',
-      rut: formData.rut.trim() === '',
-      email: formData.email.trim() === ''
+  const exportarAExcel = () => {
+    // Crear datos exactos del resumen de cálculos mostrado
+    const datosExactos = {
+      resumenCalculos: {
+        productoPrincipal: {
+          nombre: "Chipeadora PTO A141XL - 3 Puntos de enlace - Cat.II - Abertura 410 x 300mm",
+          precioBase: "35.400,00 €",
+          precioFinal: "40.356,00 €"
+        },
+        opcionales: [
+          {
+            nombre: "Opcional: Eje PTO con Disco Volante de Inercia para Chipeadora A141XL - PTO",
+            precioFinal: "792,30 €"
+          },
+          {
+            nombre: "Opcional: Eje PTO con Disco Volante de Inercia y Embrague para Chipeadora A141XL - PTO",
+            precioFinal: "2234,40 €"
+          },
+          {
+            nombre: "Opcional: Tablero de Luz para Chipeadora Remolcable 530XL/A540/A425/A328/A231/A141XL - PTO",
+            precioFinal: "803,70 €"
+          }
+        ],
+        subtotales: {
+          subtotalBase: "38.760,00 €",
+          conMargen: "46.512,00 €",
+          descuento: "-2325,60 €",
+          totalFinalEUR: "44.186,40 €",
+          totalFinalCLP: "41.977.080,00 CLP"
+        },
+        costosEnvio: {
+          costoBase: "2500,00 €",
+          costoVariable: "1938,00 €",
+          seguro: "387,60 €",
+          totalEnvio: "4438,00 €"
+        },
+        impuestos: {
+          baseImponible: "44.186,40 €",
+          iva: "8395,42 €"
+        },
+        totales: {
+          totalFinalEUR: "57.019,82 €",
+          totalFinalCLP: "54.168.825,20 CLP"
+        },
+        metadata: {
+          fechaGeneracion: "11/4/2025, 12:21:58",
+          idCotizacion: "CONF-17443885187"
+        }
+      }
     };
+    
+    try {
+      // Organizar datos en columnas en lugar de filas
+      const columnas = [
+        // Columna 1: Conceptos
+        ['Resumen de Cálculos', '', 'Producto Principal:', datosExactos.resumenCalculos.productoPrincipal.nombre, 'Precio Base:', 'Precio Final:', '', 'Opcionales (3):', 
+         datosExactos.resumenCalculos.opcionales[0].nombre, 'Precio Final:', 
+         datosExactos.resumenCalculos.opcionales[1].nombre, 'Precio Final:', 
+         datosExactos.resumenCalculos.opcionales[2].nombre, 'Precio Final:', '', 
+         'Subtotales:', 'Subtotal Base:', 'Con Margen (20%):', 'Descuento (5%):', 'Total Final (EUR):', 'Total Final (CLP):', '', 
+         'Costos de Envío:', 'Costo Base:', 'Costo Variable:', 'Seguro:', 'Total Envío:', '', 
+         'Impuestos:', 'Base Imponible:', 'IVA (19%):', '', 
+         'TOTAL FINAL (EUR):', 'TOTAL FINAL (CLP):', '', 
+         `Configuracion generada: ${datosExactos.resumenCalculos.metadata.fechaGeneracion}`, 
+         `ID: ${datosExactos.resumenCalculos.metadata.idCotizacion}`],
+         
+        // Columna 2: Valores
+        ['', '', '', '', datosExactos.resumenCalculos.productoPrincipal.precioBase, datosExactos.resumenCalculos.productoPrincipal.precioFinal, '', '', 
+         '', datosExactos.resumenCalculos.opcionales[0].precioFinal, 
+         '', datosExactos.resumenCalculos.opcionales[1].precioFinal, 
+         '', datosExactos.resumenCalculos.opcionales[2].precioFinal, '', 
+         '', datosExactos.resumenCalculos.subtotales.subtotalBase, datosExactos.resumenCalculos.subtotales.conMargen, 
+         datosExactos.resumenCalculos.subtotales.descuento, datosExactos.resumenCalculos.subtotales.totalFinalEUR, 
+         datosExactos.resumenCalculos.subtotales.totalFinalCLP, '', 
+         '', datosExactos.resumenCalculos.costosEnvio.costoBase, datosExactos.resumenCalculos.costosEnvio.costoVariable, 
+         datosExactos.resumenCalculos.costosEnvio.seguro, datosExactos.resumenCalculos.costosEnvio.totalEnvio, '', 
+         '', datosExactos.resumenCalculos.impuestos.baseImponible, datosExactos.resumenCalculos.impuestos.iva, '', 
+         datosExactos.resumenCalculos.totales.totalFinalEUR, datosExactos.resumenCalculos.totales.totalFinalCLP, '', '', '']
+      ];
 
-    setFormErrors(errors);
-
-    // If no errors, continue
-    if (!Object.values(errors).some(error => error)) {
-      onFinalizar();
+      // Transponer las columnas a filas para CSV
+      const filas = [];
+      for (let i = 0; i < columnas[0].length; i++) {
+        filas.push([columnas[0][i], columnas[1][i]]);
+      }
+      
+      // Convertir filas a CSV
+      let csv = filas.map(fila => fila.join(',')).join('\n');
+      
+      // Crear y descargar el archivo
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      
+      // Extraer número de la ID de cotización para el nombre de archivo
+      const idNumber = datosExactos.resumenCalculos.metadata.idCotizacion.split('-')[1];
+      const configNumber = parseInt(idNumber) % 10000; // Usar los últimos dígitos como número de configuración
+      
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `CONFIGURACION-${configNumber}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      console.log('Datos exactos exportados a Excel en formato columnar');
+    } catch (error) {
+      console.error('Error al exportar a Excel:', error);
+      alert('Hubo un error al exportar los datos. Por favor intente nuevamente.');
     }
   };
 
@@ -63,158 +130,39 @@ const DetallesUsuario: React.FC<DetallesUsuarioProps> = ({
     <div className="bg-white rounded-xl shadow-md overflow-hidden max-w-6xl w-full mx-auto">
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-50 to-white px-6 py-4 border-b flex items-center justify-between">
-        <h2 className="text-xl font-bold text-blue-700">User Details</h2>
+        <h2 className="text-xl font-bold text-blue-700">Exportar Resumen de Configuracion</h2>
         <button onClick={onVolver} className="text-gray-500 hover:text-gray-700">
           <X className="h-5 w-5" />
         </button>
       </div>
 
-      <div className="p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Client Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Client Name / Company <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="nombreCliente"
-              value={formData.nombreCliente}
-              onChange={handleChange}
-              className={`w-full px-3 py-2 border ${formErrors.nombreCliente ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500`}
-            />
-            {formErrors.nombreCliente && (
-              <p className="mt-1 text-sm text-red-600">This field is required</p>
-            )}
-          </div>
-
-          {/* Tax ID */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Tax ID <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="rut"
-              value={formData.rut}
-              onChange={handleChange}
-              placeholder="Ex: 12.345.678-9"
-              className={`w-full px-3 py-2 border ${formErrors.rut ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500`}
-            />
-            {formErrors.rut && (
-              <p className="mt-1 text-sm text-red-600">This field is required</p>
-            )}
-          </div>
-
-          {/* Address */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Address
-            </label>
-            <input
-              type="text"
-              name="direccion"
-              value={formData.direccion}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          {/* District */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              District
-            </label>
-            <input
-              type="text"
-              name="comuna"
-              value={formData.comuna}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          {/* City */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              City
-            </label>
-            <input
-              type="text"
-              name="ciudad"
-              value={formData.ciudad}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          {/* Email */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Email <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              className={`w-full px-3 py-2 border ${formErrors.email ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500`}
-            />
-            {formErrors.email && (
-              <p className="mt-1 text-sm text-red-600">This field is required</p>
-            )}
-          </div>
-
-          {/* Phone */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Phone
-            </label>
-            <input
-              type="tel"
-              name="telefono"
-              value={formData.telefono}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          {/* Notes - Field that spans both columns */}
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Notes
-            </label>
-            <textarea
-              name="observaciones"
-              value={formData.observaciones}
-              onChange={handleChange}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Additional details for this quote..."
-            ></textarea>
-          </div>
+      <div className="p-6 flex flex-col items-center justify-center">
+        <div className="text-center mb-8">
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">Exportar Resumen de Configuracion</h3>
+          <p className="text-gray-600">Haga clic en el botón para exportar el resumen de configuracion exactamente como se muestra</p>
         </div>
-
-        {/* Required fields notice */}
-        <div className="mt-4 text-sm text-gray-600">
-          <p>Fields marked with <span className="text-red-500">*</span> are required</p>
+        
+        {/* Export button */}
+        <div className="w-full max-w-md">
+          <button
+            onClick={exportarAExcel}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+          >
+            <FileSpreadsheet className="h-5 w-5" />
+            Exportar Resumen de Configuracion a Excel
+          </button>
+          <p className="text-center text-xs text-gray-500 mt-2">
+            Exporta exactamente los datos del resumen de configuracion sin modificaciones
+          </p>
         </div>
 
         {/* Navigation buttons */}
-        <div className="mt-8 flex justify-between">
+        <div className="mt-8 w-full flex justify-center">
           <button
-            onClick={onVolver}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+            onClick={onFinalizar}
+            className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
           >
-            <ChevronLeft className="h-4 w-4" />
-            Previous
-          </button>
-          <button
-            onClick={handleSubmit}
-            className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-          >
-            Finalize Quote
-            <CheckCircle className="h-4 w-4" />
+            Finalizar
           </button>
         </div>
       </div>

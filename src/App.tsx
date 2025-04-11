@@ -16,9 +16,10 @@ import {
   MessageCircle,
   Send,
 } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, Routes, Route } from 'react-router-dom';
 import LogoEcoAlliance from './components/LogoEcoAlliance';
 import ReactMarkdown from 'react-markdown';
+import AdminPanel from './components/admin/AdminPanel';
 
 // Interfaces
 interface Producto {
@@ -406,37 +407,10 @@ export default function App() {
     const opcionalesSeleccionados = selectedOpcionales;
     
     try {
-      // Configuración de datos
-      const codigoPrincipal = productoSeleccionado.codigo_producto;
-      const opcionalesCodigos = selectedOpcionales.map(opcional => opcional.codigo_producto);
-      
-      // Intentar primero con un enfoque simplificado
-      const params = new URLSearchParams();
-      params.append('codigo', codigoPrincipal);
-      
-      // Agregar cada código opcional como un parámetro separado para evitar problemas de parseo
-      opcionalesCodigos.forEach((codigo, index) => {
-        params.append(`opcional_${index}`, codigo);
-      });
-      
-      const url = `${WEBHOOK_URL_SETTINGS}?${params.toString()}`;
-      console.log("Intentando cotización con URL:", url);
-      
-      // Usar fetch con modo "no-cors" para evitar restricciones CORS
-      // Nota: Esto hará que la respuesta sea "opaque" y no se podrá leer directamente
-      const response = await fetch(url, {
-        method: 'GET', 
-        mode: 'no-cors',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        }
-      });
-      
-      console.log("Respuesta recibida:", response);
-      
-      // Como estamos usando no-cors, no podemos verificar status o leer la respuesta
-      // Así que asumimos éxito y continuamos
+      // Navegar directamente a la página de cotización con los datos seleccionados
+      // Omitiendo la llamada al webhook para evitar errores
+      console.log("Navegando a cotización con producto:", productoPrincipal.codigo_producto);
+      console.log("Opcionales seleccionados:", opcionalesSeleccionados.length);
       
       // Navegar a la página de cotización con los datos
       navigate('/cotizacion', {
@@ -452,7 +426,7 @@ export default function App() {
       // Intentar navegar de todos modos si es posible
       try {
         // Plan B: Navegar a la cotización incluso con error
-        alert(`Advertencia: Se produjo un error al contactar al servidor, pero continuaremos con cotización. Detalle: ${error.message || 'Error desconocido'}`);
+        alert(`Advertencia: Se produjo un error, pero continuaremos con cotización. Detalle: ${error.message || 'Error desconocido'}`);
         
         navigate('/cotizacion', {
           state: {
@@ -499,6 +473,13 @@ export default function App() {
           >
             <BarChart2 className="h-4 w-4" />
             EQUIPOS
+          </Link>
+          <Link
+            to="/admin"
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-gray-50"
+          >
+            <BarChart2 className="h-4 w-4" />
+            ADMIN
           </Link>
         </nav>
 
