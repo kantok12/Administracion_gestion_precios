@@ -3,10 +3,23 @@ import { Calculator, Settings, Info, FileText, RefreshCw, BarChart3, BarChart2, 
 import { Link } from 'react-router-dom';
 import LogoEcoAlliance from '../../components/LogoEcoAlliance';
 
+// Objeto de caché para almacenar los valores de las divisas
+const currencyCache = {
+  dolar: null as number | null,
+  euro: null as number | null,
+  lastUpdated: null as Date | null,
+};
+
 const AdminPanel: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('calculos');
   const [lastCurrencyUpdate, setLastCurrencyUpdate] = useState<string | null>(null);
   const [isUpdatingCurrency, setIsUpdatingCurrency] = useState<boolean>(false);
+  const [dolar, setDolar] = useState<number | null>(currencyCache.dolar);
+  const [euro, setEuro] = useState<number | null>(currencyCache.euro);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(
+    currencyCache.lastUpdated ? currencyCache.lastUpdated.toLocaleString() : null
+  );
+  const [isUpdating, setIsUpdating] = useState(false);
   
   // Estado para los parámetros de cálculo
   const [calculationParams, setCalculationParams] = useState({
@@ -107,6 +120,16 @@ const AdminPanel: React.FC = () => {
         dolarValue = truncateToInteger(dolarValue / 100);
         euroValue = truncateToInteger(euroValue / 100);
 
+        // Actualizar caché
+        currencyCache.dolar = dolarValue;
+        currencyCache.euro = euroValue;
+        currencyCache.lastUpdated = new Date();
+
+        // Actualizar estado
+        setDolar(dolarValue);
+        setEuro(euroValue);
+        setLastUpdated(currencyCache.lastUpdated.toLocaleString());
+
         setCalculationParams(prev => ({
           ...prev,
           dolarObservadoCLP: dolarValue,
@@ -146,45 +169,27 @@ const AdminPanel: React.FC = () => {
       <aside className="w-64 bg-white shadow-md p-6 flex flex-col">
         <LogoEcoAlliance className="h-12 mb-8" />
         
-        <nav className="space-y-2 flex-1">
-          <Link 
-            to="/" 
-            className="flex items-center gap-2 p-2 rounded-md text-gray-700 hover:bg-gray-100"
+        <nav className="space-y-1 mt-4 flex-1">
+          <Link
+            to="/"
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-gray-50"
           >
-            <BarChart3 size={18} />
-            <span>Dashboard</span>
+            <BarChart3 className="h-4 w-4" />
+            DASHBOARD
           </Link>
-          
-          <Link 
-            to="/cotizacion" 
-            className="flex items-center gap-2 p-2 rounded-md text-gray-700 hover:bg-gray-100"
+          <Link
+            to="/equipos"
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-gray-50"
           >
-            <FileText size={18} />
-            <span>Cotizaciones</span>
+            <BarChart2 className="h-4 w-4" />
+            EQUIPOS
           </Link>
-          
-          <Link 
-            to="/equipos" 
-            className="flex items-center gap-2 p-2 rounded-md text-gray-700 hover:bg-gray-100"
+          <Link
+            to="/admin"
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-blue-50 text-blue-600"
           >
-            <BarChart2 size={18} />
-            <span>Equipos</span>
-          </Link>
-          
-          <Link 
-            to="/admin" 
-            className="flex items-center gap-2 p-2 rounded-md bg-blue-50 text-blue-600 font-medium"
-          >
-            <Settings size={18} />
-            <span>Admin</span>
-          </Link>
-          
-          <Link 
-            to="/calculo" 
-            className="flex items-center gap-2 p-2 rounded-md text-gray-700 hover:bg-gray-100"
-          >
-            <Calculator size={18} />
-            <span>Cálculos</span>
+            <Settings className="h-4 w-4" />
+            ADMIN
           </Link>
         </nav>
         
