@@ -19,7 +19,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <Route path="/equipos" element={<App />} />
       <Route path="/calculo" element={<Calculo />} />
       <Route path="/configuracion" element={<Configuracion />} />
-      <Route path="/settings" element={<Cotizacion />} />
       <Route path="/cotizacion" element={<Cotizacion />} />
       <Route path="/admin" element={<AdminPanel />} />
     </Routes>

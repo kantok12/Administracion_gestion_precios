@@ -1,402 +1,501 @@
-import React, { useState } from 'react';
-import { Calculator, Settings, Info, FileText, Download, RefreshCw, BarChart3, BarChart2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calculator, Settings, Info, FileText, RefreshCw, BarChart3, BarChart2, Save, Clock, DollarSign, Euro } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import LogoEcoAlliance from '../../components/LogoEcoAlliance';
 
 const AdminPanel: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('calculos');
+  const [lastCurrencyUpdate, setLastCurrencyUpdate] = useState<string | null>(null);
+  const [isUpdatingCurrency, setIsUpdatingCurrency] = useState<boolean>(false);
   
   // Estado para los parámetros de cálculo
   const [calculationParams, setCalculationParams] = useState({
-    markup: 20,
-    descuento: 5,
-    tipoIva: 19,
-    tasaCambioEUR: 950,
-    costoBaseEnvio: 2500,
-    costoVariableEnvio: 0.05, // 5% del valor del producto
-    seguro: 0.01, // 1% del valor del producto
+    // Parámetros monetarios
+    costoPrincipal: 35400,
+    costoFabricaOriginalEUR: 28500,
+    descuentoFabricante: 5, // en porcentaje
+    
+    // Tipos de cambio
+    tipoCambioEURUSD: 1.12, // EUR a USD
+    bufferEURUSD: 2.5, // en porcentaje
+    dolarObservadoCLP: null as number | null,
+    euroObservadoCLP: null as number | null,
+    bufferUSDCLP: 1.8, // en porcentaje
+    
+    // Parámetros de envío y seguro
+    tasaSeguro: 1, // en porcentaje
+    bufferTransporte: 5, // en porcentaje
+    
+    // Márgenes y cálculos adicionales
+    margenAdicionalTotal: 20, // en porcentaje
+    
+    // Fechas
+    fechaUltimaActualizacion: new Date().toISOString().split('T')[0],
+    fechaActualizacionDivisas: ''
   });
   
-  // Ejemplo de cálculo para mostrar
-  const [calculationExample, setCalculationExample] = useState({
-    precioBase: 35400,
-    precioConMargen: 0,
-    precioConDescuento: 0,
-    subtotal: 0,
-    costoEnvio: 0,
-    seguro: 0,
-    totalEnvio: 0,
-    baseImponible: 0,
-    iva: 0,
-    totalEUR: 0,
-    totalCLP: 0
-  });
+  // URL del webhook para obtener el valor de las divisas
+  const WEBHOOK_URL_DIVISAS = "https://n8n-807184488368.southamerica-west1.run.app/webhook/8012d60e-8a29-4910-b385-6514edc3d912";
   
+  // Función para convertir cadenas a números
+  const toNum = (s: string) => parseFloat(s.replace(/\./g, '').replace(',', '.'));
+
+  // Modificar la función roundToNearestInteger para truncar los valores después de la coma
+  const truncateToInteger = (value: number): number => {
+    return Math.floor(value);
+  };
+
   // Función para actualizar los parámetros
   const handleParamChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    
+    // Convertir a número si es un campo numérico
+    const numericFields = [
+      'costoPrincipal',
+      'costoFabricaOriginalEUR',
+      'descuentoFabricante',
+      'tipoCambioEURUSD',
+      'bufferEURUSD',
+      'bufferUSDCLP',
+      'tasaSeguro',
+      'bufferTransporte',
+      'margenAdicionalTotal'
+    ];
+    
+    const newValue = numericFields.includes(name) && value !== '' 
+      ? toNum(value) 
+      : value;
+    
     setCalculationParams({
       ...calculationParams,
-      [name]: parseFloat(value)
+      [name]: newValue
     });
   };
   
-  // Función para recalcular el ejemplo
-  const recalcularEjemplo = () => {
-    const { markup, descuento, tipoIva, tasaCambioEUR, costoBaseEnvio, costoVariableEnvio, seguro } = calculationParams;
-    const { precioBase } = calculationExample;
-    
-    // Cálculo con margen
-    const precioConMargen = precioBase * (1 + markup / 100);
-    
-    // Aplicar descuento
-    const valorDescuento = precioConMargen * (descuento / 100);
-    const precioConDescuento = precioConMargen - valorDescuento;
-    
-    // Cálculo de envío
-    const costoEnvioVariable = precioConDescuento * costoVariableEnvio;
-    const costoEnvio = costoBaseEnvio + costoEnvioVariable;
-    
-    // Seguro
-    const valorSeguro = precioConDescuento * seguro;
-    
-    // Total envío
-    const totalEnvio = costoEnvio + valorSeguro;
-    
-    // Base imponible (subtotal + envío)
-    const baseImponible = precioConDescuento;
-    
-    // IVA
-    const iva = baseImponible * (tipoIva / 100);
-    
-    // Total EUR
-    const totalEUR = baseImponible + iva;
-    
-    // Total CLP
-    const totalCLP = totalEUR * tasaCambioEUR;
-    
-    setCalculationExample({
-      precioBase,
-      precioConMargen,
-      precioConDescuento,
-      subtotal: precioConDescuento,
-      costoEnvio,
-      seguro: valorSeguro,
-      totalEnvio,
-      baseImponible,
-      iva,
-      totalEUR,
-      totalCLP
-    });
+  const handleSaveParams = () => {
+    alert("Parámetros guardados con éxito");
+    console.log("Parámetros guardados:", calculationParams);
   };
   
-  // Ejecutar cálculo inicial
-  React.useEffect(() => {
-    recalcularEjemplo();
-  }, [calculationParams]);
+  // Función para obtener los valores del dólar y euro desde el webhook
+  const fetchCurrencyValues = async () => {
+    try {
+      setIsUpdatingCurrency(true);
+      const response = await fetch(WEBHOOK_URL_DIVISAS);
+
+      if (!response.ok) {
+        throw new Error(`Error de API: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const currencyData = Array.isArray(data) ? data[0] : data;
+
+      if (
+        currencyData &&
+        (
+          ("Valor_Dolar" in currencyData && "Valor_Euro" in currencyData) ||
+          ("valor_dolar" in currencyData && "valor_euro" in currencyData)
+        )
+      ) {
+        let dolarValue = toNum(currencyData.Valor_Dolar || currencyData.valor_dolar);
+        let euroValue = toNum(currencyData.Valor_Euro || currencyData.valor_euro);
+
+        if (isNaN(dolarValue) || isNaN(euroValue)) {
+          throw new Error("Valores no numéricos");
+        }
+
+        dolarValue = truncateToInteger(dolarValue / 100);
+        euroValue = truncateToInteger(euroValue / 100);
+
+        setCalculationParams(prev => ({
+          ...prev,
+          dolarObservadoCLP: dolarValue,
+          euroObservadoCLP: euroValue,
+          fechaActualizacionDivisas: currencyData.Fecha || currencyData.fecha || ''
+        }));
+
+        setLastCurrencyUpdate(new Date().toLocaleString());
+      } else {
+        throw new Error("Formato de datos incorrecto");
+      }
+    } catch (error) {
+      console.error("Error en la actualización de divisas:", error);
+    } finally {
+      setIsUpdatingCurrency(false);
+    }
+  };
+  
+  // Efecto para la actualización automática diaria
+  useEffect(() => {
+    fetchCurrencyValues();
+    
+    const checkTimeAndUpdate = () => {
+      const now = new Date();
+      if (now.getHours() === 12 && now.getMinutes() === 0) {
+        fetchCurrencyValues();
+      }
+    };
+    
+    const intervalId = setInterval(checkTimeAndUpdate, 60000);
+    return () => clearInterval(intervalId);
+  }, []);
   
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
-      <aside className="w-56 bg-white shadow-md p-4 flex flex-col">
-        <header className="mb-4">
-          <LogoEcoAlliance className="h-20 ml-0" />
-        </header>
-
-        {/* Menú Lateral */}
-        <nav className="space-y-1 mt-4 flex-1">
-          <Link
-            to="/"
-            className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-gray-50"
+      <aside className="w-64 bg-white shadow-md p-6 flex flex-col">
+        <LogoEcoAlliance className="h-12 mb-8" />
+        
+        <nav className="space-y-2 flex-1">
+          <Link 
+            to="/" 
+            className="flex items-center gap-2 p-2 rounded-md text-gray-700 hover:bg-gray-100"
           >
-            <BarChart3 className="h-4 w-4" />
-            DASHBOARD
+            <BarChart3 size={18} />
+            <span>Dashboard</span>
           </Link>
-          <Link
-            to="/equipos"
-            className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-gray-50"
+          
+          <Link 
+            to="/cotizacion" 
+            className="flex items-center gap-2 p-2 rounded-md text-gray-700 hover:bg-gray-100"
           >
-            <Settings className="h-4 w-4" />
-            EQUIPOS
+            <FileText size={18} />
+            <span>Cotizaciones</span>
           </Link>
-          <Link
-            to="/admin"
-            className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-blue-50 text-blue-600"
+          
+          <Link 
+            to="/equipos" 
+            className="flex items-center gap-2 p-2 rounded-md text-gray-700 hover:bg-gray-100"
           >
-            <Settings className="h-4 w-4" />
-            ADMIN
+            <BarChart2 size={18} />
+            <span>Equipos</span>
+          </Link>
+          
+          <Link 
+            to="/admin" 
+            className="flex items-center gap-2 p-2 rounded-md bg-blue-50 text-blue-600 font-medium"
+          >
+            <Settings size={18} />
+            <span>Admin</span>
+          </Link>
+          
+          <Link 
+            to="/calculo" 
+            className="flex items-center gap-2 p-2 rounded-md text-gray-700 hover:bg-gray-100"
+          >
+            <Calculator size={18} />
+            <span>Cálculos</span>
           </Link>
         </nav>
         
-        {/* Botón de configuración en la parte inferior */}
-        <div className="pt-2 border-t mt-auto">
-          <Link
-            to="/configuracion"
-            className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-gray-50"
+        <div className="mt-auto pt-4 border-t border-gray-200">
+          <Link 
+            to="/configuracion" 
+            className="flex items-center gap-2 p-2 rounded-md text-gray-700 hover:bg-gray-100"
           >
-            <Settings className="h-4 w-4" />
-            CONFIGURACIÓN
+            <Settings size={18} />
+            <span>Configuración</span>
           </Link>
         </div>
       </aside>
       
-      {/* Panel Principal */}
-      <main className="flex-1 p-4 flex flex-col max-h-screen overflow-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">ADMIN</h2>
+      {/* Contenido principal */}
+      <main className="flex-1 p-6 overflow-auto">
+        <div className="flex justify-between items-center mb-6 sticky top-0 bg-gray-50 z-10 py-2">
+          <h1 className="text-2xl font-bold">ADMIN</h1>
+          
           <button 
-            onClick={recalcularEjemplo}
-            className="flex items-center gap-1 text-xs px-2 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+            onClick={handleSaveParams} 
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
           >
-            <RefreshCw className="h-3 w-3" />
-            Actualizar cálculos
+            <Save size={16} />
+            Guardar Cambios
           </button>
         </div>
         
-        {/* Tabs de navegación */}
-        <div className="bg-white shadow-sm mb-4 rounded-lg overflow-hidden">
-          <div className="flex border-b">
-            <button 
-              className={`px-4 py-3 text-sm font-medium ${activeTab === 'calculos' ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600' : 'text-gray-600 hover:bg-gray-50'}`}
-              onClick={() => setActiveTab('calculos')}
-            >
-              Cálculos y Parámetros
-            </button>
-            
-            <button 
-              className={`px-4 py-3 text-sm font-medium ${activeTab === 'configuracion' ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600' : 'text-gray-600 hover:bg-gray-50'}`}
-              onClick={() => setActiveTab('configuracion')}
-            >
-              Configuración
-            </button>
-            
-            <button 
-              className={`px-4 py-3 text-sm font-medium ${activeTab === 'logs' ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600' : 'text-gray-600 hover:bg-gray-50'}`}
-              onClick={() => setActiveTab('logs')}
-            >
-              Registro de Actividad
-            </button>
+        {/* Pestañas */}
+        <div className="mb-6">
+          <div className="border-b border-gray-200">
+            <nav className="-mb-px flex" aria-label="Tabs">
+              <button
+                onClick={() => setActiveTab('calculos')}
+                className={`
+                  py-3 px-4 border-b-2 font-medium text-sm
+                  ${activeTab === 'calculos' 
+                    ? 'border-blue-500 text-blue-600' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
+                `}
+              >
+                Cálculos y Parámetros
+              </button>
+              
+              <button
+                onClick={() => setActiveTab('configuracion')}
+                className={`
+                  py-3 px-4 border-b-2 font-medium text-sm
+                  ${activeTab === 'configuracion' 
+                    ? 'border-blue-500 text-blue-600' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
+                `}
+              >
+                Configuración
+              </button>
+              
+              <button
+                onClick={() => setActiveTab('logs')}
+                className={`
+                  py-3 px-4 border-b-2 font-medium text-sm
+                  ${activeTab === 'logs' 
+                    ? 'border-blue-500 text-blue-600' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
+                `}
+              >
+                Registro de Actividad
+              </button>
+            </nav>
           </div>
         </div>
-      
-        {/* Contenido principal */}
+        
+        {/* Contenido de la pestaña activa */}
         {activeTab === 'calculos' && (
-          <div className="bg-white shadow rounded-lg overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-              <h2 className="text-lg font-medium text-gray-900 flex items-center">
-                <Calculator className="mr-2 h-5 w-5 text-blue-600" />
-                Lógica de Cálculo de Detalles Tributarios
-              </h2>
-            </div>
-            
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Parámetros de Cálculo */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-md font-semibold text-gray-700 mb-4">Parámetros de Cálculo</h3>
+          <div>
+            <div className="mb-6 p-4 bg-white rounded-md shadow-sm border border-gray-200">
+              <div className="flex items-center mb-4">
+                <Calculator className="text-blue-500 mr-2" size={20} />
+                <h2 className="text-lg font-semibold">Parámetros de Cálculo y Costos</h2>
+              </div>
+              
+              {/* Sección de divisas */}
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-base font-medium">Valores Actuales de Divisas</h3>
                   
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Margen (%)
-                      </label>
-                      <input 
-                        type="number" 
-                        name="markup" 
-                        value={calculationParams.markup} 
-                        onChange={handleParamChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <p className="mt-1 text-xs text-gray-500">Porcentaje de margen aplicado al precio base</p>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Descuento (%)
-                      </label>
-                      <input 
-                        type="number" 
-                        name="descuento" 
-                        value={calculationParams.descuento} 
-                        onChange={handleParamChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <p className="mt-1 text-xs text-gray-500">Porcentaje de descuento aplicado después del margen</p>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        IVA (%)
-                      </label>
-                      <input 
-                        type="number" 
-                        name="tipoIva" 
-                        value={calculationParams.tipoIva} 
-                        onChange={handleParamChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <p className="mt-1 text-xs text-gray-500">Porcentaje de IVA aplicado al subtotal</p>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Tasa de Cambio EUR a CLP
-                      </label>
-                      <input 
-                        type="number" 
-                        name="tasaCambioEUR" 
-                        value={calculationParams.tasaCambioEUR} 
-                        onChange={handleParamChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <p className="mt-1 text-xs text-gray-500">Valor de 1 EUR en CLP</p>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Costo Base de Envío (EUR)
-                      </label>
-                      <input 
-                        type="number" 
-                        name="costoBaseEnvio" 
-                        value={calculationParams.costoBaseEnvio} 
-                        onChange={handleParamChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <p className="mt-1 text-xs text-gray-500">Costo fijo base para cualquier envío</p>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Costo Variable de Envío (como decimal)
-                      </label>
-                      <input 
-                        type="number" 
-                        step="0.01" 
-                        name="costoVariableEnvio" 
-                        value={calculationParams.costoVariableEnvio} 
-                        onChange={handleParamChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <p className="mt-1 text-xs text-gray-500">Porcentaje del valor del producto (ej: 0.05 = 5%)</p>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Seguro (como decimal)
-                      </label>
-                      <input 
-                        type="number" 
-                        step="0.01" 
-                        name="seguro" 
-                        value={calculationParams.seguro} 
-                        onChange={handleParamChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <p className="mt-1 text-xs text-gray-500">Porcentaje del valor del producto (ej: 0.01 = 1%)</p>
-                    </div>
-                    
+                  <div className="flex items-center gap-3">
                     <button
-                      onClick={recalcularEjemplo}
-                      className="mt-4 flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                      onClick={fetchCurrencyValues}
+                      disabled={isUpdatingCurrency}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded hover:bg-blue-100 disabled:opacity-50"
                     >
-                      <RefreshCw className="mr-2 h-4 w-4" />
-                      Recalcular Ejemplo
+                      {isUpdatingCurrency ? (
+                        <>
+                          <RefreshCw className="animate-spin" size={14} />
+                          <span>Actualizando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw size={14} />
+                          <span>Actualizar Divisas</span>
+                        </>
+                      )}
                     </button>
+                    
+                    <div className="flex items-center text-xs text-gray-500">
+                      <Clock size={12} className="mr-1" />
+                      <span>
+                        {lastCurrencyUpdate ? `Última actualización: ${lastCurrencyUpdate}` : 'Sin actualización reciente'}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 
-                {/* Ejemplo de Cálculo */}
-                <div>
-                  <h3 className="text-md font-semibold text-gray-700 mb-4">Ejemplo de Cálculo</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Dólar */}
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
+                    <div className="flex items-center mb-2">
+                      <DollarSign className="text-blue-500 mr-2" size={16} />
+                      <span className="font-medium">Dólar Observado Actual (CLP)</span>
+                    </div>
+                    
+                    <input
+                      type="text"
+                      name="dolarObservadoCLP"
+                      value={calculationParams.dolarObservadoCLP !== null ? String(calculationParams.dolarObservadoCLP) : ''}
+                      onChange={handleParamChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    />
+                    
+                    {calculationParams.fechaActualizacionDivisas && (
+                      <p className="mt-1 text-xs text-gray-500">
+                        Valor del {calculationParams.fechaActualizacionDivisas}
+                      </p>
+                    )}
+                  </div>
                   
-                  <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm">
-                    <h4 className="font-medium text-gray-800 mb-2">Chipeadora PTO A141XL</h4>
-                    <p className="text-sm text-gray-600 mb-4">Demostración paso a paso del cálculo de precios</p>
-                    
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <span className="text-gray-600">Precio Base:</span>
-                        <span className="text-gray-900 font-medium">{calculationExample.precioBase.toFixed(2)} €</span>
-                        
-                        <span className="text-gray-600">+ Margen ({calculationParams.markup}%):</span>
-                        <span className="text-blue-600 font-medium">{(calculationExample.precioConMargen - calculationExample.precioBase).toFixed(2)} €</span>
-                        
-                        <span className="text-gray-600">= Precio con Margen:</span>
-                        <span className="text-gray-900 font-medium">{calculationExample.precioConMargen.toFixed(2)} €</span>
-                        
-                        <span className="text-gray-600">- Descuento ({calculationParams.descuento}%):</span>
-                        <span className="text-red-600 font-medium">{(calculationExample.precioConMargen - calculationExample.precioConDescuento).toFixed(2)} €</span>
-                        
-                        <span className="text-gray-600">= Subtotal:</span>
-                        <span className="text-gray-900 font-medium">{calculationExample.subtotal.toFixed(2)} €</span>
-                        
-                        <span className="text-gray-600">+ IVA ({calculationParams.tipoIva}%):</span>
-                        <span className="text-blue-600 font-medium">{calculationExample.iva.toFixed(2)} €</span>
-                        
-                        <span className="text-gray-600">= Total (EUR):</span>
-                        <span className="text-gray-900 font-semibold">{calculationExample.totalEUR.toFixed(2)} €</span>
-                        
-                        <span className="text-gray-600">= Total (CLP):</span>
-                        <span className="text-gray-900 font-semibold">{calculationExample.totalCLP.toLocaleString('es-CL')} CLP</span>
-                      </div>
-                      
-                      <hr className="my-2" />
-                      
-                      <div className="grid grid-cols-2 gap-2 text-sm bg-gray-50 p-2 rounded">
-                        <span className="text-gray-600 font-medium">Detalles de Envío:</span>
-                        <span></span>
-                        
-                        <span className="text-gray-600">Costo Base:</span>
-                        <span className="text-gray-900">{calculationParams.costoBaseEnvio.toFixed(2)} €</span>
-                        
-                        <span className="text-gray-600">Costo Variable ({(calculationParams.costoVariableEnvio * 100).toFixed(0)}%):</span>
-                        <span className="text-gray-900">{(calculationExample.subtotal * calculationParams.costoVariableEnvio).toFixed(2)} €</span>
-                        
-                        <span className="text-gray-600">Seguro ({(calculationParams.seguro * 100).toFixed(0)}%):</span>
-                        <span className="text-gray-900">{calculationExample.seguro.toFixed(2)} €</span>
-                        
-                        <span className="text-gray-600 font-medium">Total Envío:</span>
-                        <span className="text-gray-900 font-medium">{calculationExample.totalEnvio.toFixed(2)} €</span>
-                      </div>
+                  {/* Euro */}
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
+                    <div className="flex items-center mb-2">
+                      <Euro className="text-green-500 mr-2" size={16} />
+                      <span className="font-medium">Euro Observado Actual (CLP)</span>
                     </div>
                     
-                    <div className="mt-4 p-3 bg-blue-50 rounded-md">
-                      <h5 className="text-sm font-medium text-blue-700 mb-2">Fórmulas aplicadas:</h5>
-                      <ul className="text-xs text-blue-800 space-y-1">
-                        <li>1. Precio con margen = Precio base × (1 + Margen%/100)</li>
-                        <li>2. Descuento = Precio con margen × (Descuento%/100)</li>
-                        <li>3. Subtotal = Precio con margen - Descuento</li>
-                        <li>4. IVA = Subtotal × (IVA%/100)</li>
-                        <li>5. Total EUR = Subtotal + IVA</li>
-                        <li>6. Total CLP = Total EUR × Tasa de cambio</li>
-                        <li>7. Costo variable envío = Subtotal × Porcentaje variable</li>
-                        <li>8. Seguro = Subtotal × Porcentaje seguro</li>
-                        <li>9. Total envío = Costo base + Costo variable + Seguro</li>
-                      </ul>
+                    <input
+                      type="text"
+                      name="euroObservadoCLP"
+                      value={calculationParams.euroObservadoCLP !== null ? String(calculationParams.euroObservadoCLP) : ''}
+                      onChange={handleParamChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    />
+                    
+                    {calculationParams.fechaActualizacionDivisas && (
+                      <p className="mt-1 text-xs text-gray-500">
+                        Valor del {calculationParams.fechaActualizacionDivisas}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                
+                <p className="mt-2 text-xs text-blue-600 flex items-center">
+                  <Info size={12} className="mr-1" />
+                  Los valores se actualizan automáticamente todos los días a las 12:00 PM. También puedes actualizar manualmente.
+                </p>
+              </div>
+              
+              {/* Parámetros de cálculo */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Costos Base */}
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
+                  <h3 className="font-medium mb-4">Costos Base</h3>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Costo Fábrica Original (EUR)
+                      </label>
+                      <input
+                        type="text"
+                        name="costoFabricaOriginalEUR"
+                        value={calculationParams.costoFabricaOriginalEUR}
+                        onChange={handleParamChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Costo base desde el fabricante</p>
                     </div>
                     
-                    <div className="mt-4">
-                      <button
-                        className="flex items-center text-sm text-blue-600 hover:text-blue-800"
-                      >
-                        <Download className="mr-1 h-4 w-4" />
-                        Descargar documentación completa
-                      </button>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Descuento Fabricante (%)
+                      </label>
+                      <input
+                        type="text"
+                        name="descuentoFabricante"
+                        value={calculationParams.descuentoFabricante}
+                        onChange={handleParamChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Porcentaje de descuento aplicado</p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Margen Adicional Total (%)
+                      </label>
+                      <input
+                        type="text"
+                        name="margenAdicionalTotal"
+                        value={calculationParams.margenAdicionalTotal}
+                        onChange={handleParamChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Margen de costo adicional</p>
                     </div>
                   </div>
                 </div>
-              </div>
-              
-              <div className="mt-8 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <div className="flex">
-                  <Info className="h-5 w-5 text-yellow-600 mr-2 flex-shrink-0" />
-                  <div>
-                    <h3 className="text-sm font-medium text-yellow-800">Acceso administrador</h3>
-                    <p className="text-sm text-yellow-700 mt-1">
-                      Esta sección muestra la lógica de cálculo utilizada en toda la aplicación para determinar precios, 
-                      impuestos y costos de envío. Los cambios en estos parámetros afectarán a todas las cotizaciones nuevas.
-                    </p>
+                
+                {/* Tipos de Cambio */}
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
+                  <h3 className="font-medium mb-4">Tipos de Cambio</h3>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Tipo de Cambio EUR/USD
+                      </label>
+                      <input
+                        type="text"
+                        name="tipoCambioEURUSD"
+                        value={calculationParams.tipoCambioEURUSD}
+                        onChange={handleParamChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Tasa actual Euro a Dólar</p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Buffer EUR/USD (%)
+                      </label>
+                      <input
+                        type="text"
+                        name="bufferEURUSD"
+                        value={calculationParams.bufferEURUSD}
+                        onChange={handleParamChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Margen para variaciones de cambio</p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Buffer USD/CLP (%)
+                      </label>
+                      <input
+                        type="text"
+                        name="bufferUSDCLP"
+                        value={calculationParams.bufferUSDCLP}
+                        onChange={handleParamChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Margen para variaciones del dólar</p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Transporte y Seguro */}
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
+                  <h3 className="font-medium mb-4">Transporte y Seguro</h3>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Buffer Transporte (%)
+                      </label>
+                      <input
+                        type="text"
+                        name="bufferTransporte"
+                        value={calculationParams.bufferTransporte}
+                        onChange={handleParamChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Margen para costos de transporte</p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Tasa Seguro (%)
+                      </label>
+                      <input
+                        type="text"
+                        name="tasaSeguro"
+                        value={calculationParams.tasaSeguro}
+                        onChange={handleParamChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Porcentaje para costos de seguro</p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Fecha Última Actualización
+                      </label>
+                      <input
+                        type="date"
+                        name="fechaUltimaActualizacion"
+                        value={calculationParams.fechaUltimaActualizacion}
+                        onChange={handleParamChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Fecha de actualización de precios</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -405,15 +504,15 @@ const AdminPanel: React.FC = () => {
         )}
         
         {activeTab === 'configuracion' && (
-          <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Configuración del Sistema</h2>
+          <div className="bg-white rounded-md shadow-sm p-6 border border-gray-200">
+            <h2 className="text-lg font-medium mb-4">Configuración del Sistema</h2>
             <p className="text-gray-600">Este panel está en desarrollo. Aquí se podrán configurar aspectos generales del sistema.</p>
           </div>
         )}
         
         {activeTab === 'logs' && (
-          <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Registro de Actividad</h2>
+          <div className="bg-white rounded-md shadow-sm p-6 border border-gray-200">
+            <h2 className="text-lg font-medium mb-4">Registro de Actividad</h2>
             <p className="text-gray-600">Este panel está en desarrollo. Aquí se mostrarán los registros de actividad del sistema.</p>
           </div>
         )}
