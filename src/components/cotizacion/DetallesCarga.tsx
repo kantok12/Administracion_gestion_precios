@@ -193,4 +193,4 @@ const DetallesCarga: React.FC<DetallesCargaProps> = ({
   );
 };
 
-export default DetallesCarga; 
+export default DetallesCarga;

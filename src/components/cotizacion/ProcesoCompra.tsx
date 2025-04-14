@@ -152,4 +152,4 @@ const ProcesoCompra: React.FC<ProcesoCompraProps> = ({
   );
 };
 
-export default ProcesoCompra; 
+export default ProcesoCompra;

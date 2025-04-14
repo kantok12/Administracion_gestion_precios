@@ -188,4 +188,4 @@ const DetallesEnvio: React.FC<DetallesEnvioProps> = ({
   );
 };
 
-export default DetallesEnvio; 
+export default DetallesEnvio;

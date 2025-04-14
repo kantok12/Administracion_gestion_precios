@@ -1,6 +1,31 @@
-# Backend de Cálculo de Precios para Configuraciones
+# Backend Documentation
 
-Este backend implementa la lógica de cálculo de precios basado en el precio base, margen de beneficio, descuentos y costos de envío, integrándose con el sistema de webhooks existente.
+## Overview
+This directory contains the backend logic for the project, including API endpoints, price calculations, and integration tests.
+
+## Structure
+- `api.py`: Contains the API endpoints.
+- `price_calculation.py`: Handles the logic for price calculations.
+- `run.py`: Script to run the backend server.
+- `test_frontend_integration.py` and `test_integracion.py`: Integration tests.
+- `cotizaciones/`: Directory for managing quotes.
+- `logs/`: Directory for storing logs (ensure sensitive data is excluded from version control).
+
+## Setup
+1. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. Run the server:
+   ```bash
+   python run.py
+   ```
+
+## Testing
+Run the tests using:
+```bash
+pytest
+```
 
 ## Características
 
@@ -143,4 +168,4 @@ fetch('http://localhost:5000/api/cotizacion', {
 - Implementar almacenamiento persistente (base de datos)
 - Añadir autenticación y autorización
 - Implementar interfaz de administración para configurar parámetros
-- Añadir más opciones de cálculo de costos de envío 
+- Añadir más opciones de cálculo de costos de envío

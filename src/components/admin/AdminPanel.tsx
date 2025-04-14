@@ -116,7 +116,7 @@ const AdminPanel: React.FC = () => {
             to="/equipos"
             className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-gray-50"
           >
-            <BarChart2 className="h-4 w-4" />
+            <Settings className="h-4 w-4" />
             EQUIPOS
           </Link>
           <Link
@@ -422,4 +422,4 @@ const AdminPanel: React.FC = () => {
   );
 };
 
-export default AdminPanel; 
+export default AdminPanel;

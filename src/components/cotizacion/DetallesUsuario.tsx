@@ -170,4 +170,4 @@ const DetallesUsuario: React.FC<DetallesUsuarioProps> = ({
   );
 };
 
-export default DetallesUsuario; 
+export default DetallesUsuario;

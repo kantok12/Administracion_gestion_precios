@@ -502,4 +502,4 @@ const DetallesTributarios: React.FC<DetallesTributariosProps> = ({
   );
 };
 
-export default DetallesTributarios; 
+export default DetallesTributarios;
