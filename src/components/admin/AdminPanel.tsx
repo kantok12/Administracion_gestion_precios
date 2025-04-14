@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calculator, Settings, Info, FileText, RefreshCw, BarChart3, BarChart2, Save, Clock, DollarSign, Euro } from 'lucide-react';
+import { Calculator, Settings, Info, RefreshCw, BarChart3, BarChart2, Save, Clock, DollarSign, Euro } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import LogoEcoAlliance from '../../components/LogoEcoAlliance';
 
@@ -11,15 +11,10 @@ const currencyCache = {
 };
 
 const AdminPanel: React.FC = () => {
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const machineCategories = ['Excavadoras', 'Cargadores', 'Compactadoras', 'Grúas', 'Tractores'];
   const [activeTab, setActiveTab] = useState<string>('calculos');
-  const [lastCurrencyUpdate, setLastCurrencyUpdate] = useState<string | null>(null);
   const [isUpdatingCurrency, setIsUpdatingCurrency] = useState<boolean>(false);
-  const [dolar, setDolar] = useState<number | null>(currencyCache.dolar);
-  const [euro, setEuro] = useState<number | null>(currencyCache.euro);
-  const [lastUpdated, setLastUpdated] = useState<string | null>(
-    currencyCache.lastUpdated ? currencyCache.lastUpdated.toLocaleString() : null
-  );
-  const [isUpdating, setIsUpdating] = useState(false);
   
   // Estado para los parámetros de cálculo
   const [calculationParams, setCalculationParams] = useState({
@@ -126,10 +121,6 @@ const AdminPanel: React.FC = () => {
         currencyCache.lastUpdated = new Date();
 
         // Actualizar estado
-        setDolar(dolarValue);
-        setEuro(euroValue);
-        setLastUpdated(currencyCache.lastUpdated.toLocaleString());
-
         setCalculationParams(prev => ({
           ...prev,
           dolarObservadoCLP: dolarValue,
@@ -137,7 +128,6 @@ const AdminPanel: React.FC = () => {
           fechaActualizacionDivisas: currencyData.Fecha || currencyData.fecha || ''
         }));
 
-        setLastCurrencyUpdate(new Date().toLocaleString());
       } else {
         throw new Error("Formato de datos incorrecto");
       }
@@ -148,6 +138,10 @@ const AdminPanel: React.FC = () => {
     }
   };
   
+  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedCategory(e.target.value);
+  };
+
   // Efecto para la actualización automática diaria
   useEffect(() => {
     fetchCurrencyValues();
@@ -265,9 +259,29 @@ const AdminPanel: React.FC = () => {
         {activeTab === 'calculos' && (
           <div>
             <div className="mb-6 p-4 bg-white rounded-md shadow-sm border border-gray-200">
-              <div className="flex items-center mb-4">
-                <Calculator className="text-blue-500 mr-2" size={20} />
-                <h2 className="text-lg font-semibold">Parámetros de Cálculo y Costos</h2>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center">
+                  <Calculator className="text-blue-500 mr-2" size={20} />
+                  <h2 className="text-lg font-semibold">Parámetros de Cálculo y Costos</h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label htmlFor="categoryFilter" className="text-sm font-medium text-gray-700">
+                    Filtrar por Categoría:
+                  </label>
+                  <select
+                    id="categoryFilter"
+                    value={selectedCategory}
+                    onChange={handleCategoryChange}
+                    className="w-48 px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Todas las Categorías</option>
+                    {machineCategories.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
               
               {/* Sección de divisas */}
@@ -297,7 +311,7 @@ const AdminPanel: React.FC = () => {
                     <div className="flex items-center text-xs text-gray-500">
                       <Clock size={12} className="mr-1" />
                       <span>
-                        {lastCurrencyUpdate ? `Última actualización: ${lastCurrencyUpdate}` : 'Sin actualización reciente'}
+                        {currencyCache.lastUpdated ? `Última actualización: ${currencyCache.lastUpdated.toLocaleString()}` : 'Sin actualización reciente'}
                       </span>
                     </div>
                   </div>
