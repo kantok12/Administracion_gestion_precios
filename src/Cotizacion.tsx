@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, CheckCircle } from 'lucide-react';
 import ProcesoCompra from './components/cotizacion/ProcesoCompra';
@@ -172,4 +172,4 @@ export default function Cotizacion() {
       </main>
     </div>
   );
-} 
+}

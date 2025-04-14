@@ -1,23 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  DollarSign,
   BarChart3,
-  Clock,
   BarChart2,
-  Search,
-  PlusCircle,
-  X,
+  RefreshCw,
   TrendingUp,
   TrendingDown,
   Calendar,
   ArrowUpRight,
   ArrowDownRight,
   Settings,
-  Package,
   DollarSign as DollarIcon,
-  Percent,
-  Loader,
-  RefreshCw,
+  X,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import LogoEcoAlliance from './components/LogoEcoAlliance';
@@ -53,7 +46,7 @@ export default function Dashboard() {
     variacion: 2.5,
   });
   
-  const [preciosFuturos, setPreciosFuturos] = useState<PrecioFuturo[]>([
+  const [preciosFuturos] = useState<PrecioFuturo[]>([
     { fecha: '2023-11-01', precio: 865.50, tendencia: 'up' },
     { fecha: '2023-12-01', precio: 872.75, tendencia: 'up' },
     { fecha: '2024-01-01', precio: 880.25, tendencia: 'up' },
@@ -64,7 +57,7 @@ export default function Dashboard() {
     { fecha: '2024-06-01', precio: 900.25, tendencia: 'up' },
   ]);
 
-  const [chipeadoraStats, setChipeadoraStats] = useState<ChipeadoraStats>({
+  const [chipeadoraStats] = useState<ChipeadoraStats>({
     totalCotizaciones: 156,
     cotizacionesMes: 23,
     promedioCotizacion: 12500,
@@ -81,10 +74,6 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-
-  // ----------- Webhooks -----------
-  const WEBHOOK_URL_DOLAR =
-    'https://n8n-807184488368.southamerica-west1.run.app/webhook/8012d60e-8a29-4910-b385-6514edc3d912';
 
   const [dollarValue, setDollarValue] = useState(null);
   const [euroValue, setEuroValue] = useState(null);
@@ -425,4 +414,4 @@ export default function Dashboard() {
       </main>
     </div>
   );
-} 
+}
